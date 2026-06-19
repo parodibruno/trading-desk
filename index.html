@@ -150,14 +150,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   </div>
   <div class="acard">
     <h2>Conectar ao Oplab</h2>
-    <p>Entre com email e senha, ou cole seu Access Token.<br>Token disponível em <a href="https://go.oplab.com.br/api" target="_blank" style="color:var(--accent)">go.oplab.com.br/api</a></p>
-    <div class="fg"><label>Email</label><input type="email" id="inp-email" placeholder="seu@email.com"/></div>
-    <div class="fg"><label>Senha</label><input type="password" id="inp-pass" placeholder="••••••••"/></div>
+    <p>Cole seu Access Token do Oplab.<br>Token disponível em <a href="https://go.oplab.com.br/api" target="_blank" style="color:var(--accent)">go.oplab.com.br/api</a></p>
     <div class="errmsg" id="errmsg"></div>
-    <button class="btn1" id="btn-login" onclick="doLogin()">Entrar</button>
-    <div class="divider">ou</div>
-    <div class="fg"><label>Access Token</label><input type="text" id="inp-token" placeholder="Cole seu token aqui"/></div>
-    <button class="btn2" id="btn-token" style="width:100%" onclick="doToken()">Usar Token</button>
+    <div class="fg"><label>Access Token</label><input type="text" id="inp-token" placeholder="Cole seu token aqui" onkeydown="if(event.key==='Enter')doToken()"/></div>
+    <button class="btn2" id="btn-token" style="width:100%" onclick="doToken()">Entrar</button>
+    <div style="text-align:center;margin-top:14px;font-family:var(--mono);font-size:10px;color:var(--muted)">versão <span id="app-version-login">—</span></div>
   </div>
 </div>
 
@@ -165,6 +162,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   <div class="header" style="margin:-16px -20px 0;width:calc(100% + 40px)">
     <div style="display:flex;align-items:center;gap:16px">
       <div class="logo">TRADING DESK</div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--muted);background:var(--surface2);padding:2px 7px;border-radius:4px" id="app-version-header">—</div>
       <div class="mkt"><div class="dot" id="sdot"></div><span id="stxt">Verificando...</span></div>
     </div>
     <div style="display:flex;align-items:center;gap:16px">
@@ -301,6 +299,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
 <script>
 var API = 'https://api.oplab.com.br/v3';
+var APP_VERSION = 'v1.0 · 19/jun/2026';
 var tok = '';
 var spotData = {};
 var radarData = {};
@@ -321,48 +320,37 @@ function clearErr() {
   document.getElementById('errmsg').style.display = 'none';
 }
 
-async function doLogin() {
-  var email = document.getElementById('inp-email').value.trim();
-  var pass = document.getElementById('inp-pass').value;
-  if (!email || !pass) { showErr('Preencha email e senha.'); return; }
-  clearErr();
-  var btn = document.getElementById('btn-login');
-  btn.disabled = true; btn.textContent = 'Autenticando...';
-  try {
-    var r = await fetch(API + '/domain/users/authenticate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email, password: pass })
-    });
-    var d = await r.json();
-    if (!r.ok) { showErr(d.message || ('Erro ' + r.status)); btn.disabled=false; btn.textContent='Entrar'; return; }
-    tok = d['access-token'] || d.access_token || d.token || '';
-    if (!tok) { showErr('Token não encontrado na resposta.'); btn.disabled=false; btn.textContent='Entrar'; return; }
-    startDash();
-  } catch(e) {
-    showErr('Erro de conexão: ' + e.message);
-    btn.disabled=false; btn.textContent='Entrar';
-  }
-}
-
 async function doToken() {
   var t = document.getElementById('inp-token').value.trim();
   if (!t) { showErr('Cole um token válido.'); return; }
   clearErr();
   var btn = document.getElementById('btn-token');
   btn.disabled = true; btn.textContent = 'Validando...';
+
+  // Timeout de 12s para não travar em "Validando..." se a API não responder
+  var ctrl = new AbortController();
+  var timeout = setTimeout(function(){ ctrl.abort(); }, 12000);
+
   try {
-    var r = await fetch(API + '/market/status', {
-      headers: { 'Access-Token': t }
+    // Valida com a cotação do BOVA11 (endpoint sempre disponível e leve)
+    var r = await fetch(API + '/market/quote?tickers=BOVA11', {
+      headers: { 'Access-Token': t },
+      signal: ctrl.signal
     });
-    if (r.status === 401) { showErr('Token inválido ou expirado (401). Gere um novo em go.oplab.com.br/api'); btn.disabled=false; btn.textContent='Usar Token'; return; }
-    if (r.status === 402) { showErr('Assinatura expirada (402).'); btn.disabled=false; btn.textContent='Usar Token'; return; }
-    if (!r.ok) { showErr('Erro HTTP ' + r.status); btn.disabled=false; btn.textContent='Usar Token'; return; }
+    clearTimeout(timeout);
+    if (r.status === 401) { showErr('Token inválido ou expirado (401). Gere um novo em go.oplab.com.br/api'); btn.disabled=false; btn.textContent='Entrar'; return; }
+    if (r.status === 402) { showErr('Assinatura expirada (402). Verifique sua conta no Oplab.'); btn.disabled=false; btn.textContent='Entrar'; return; }
+    if (!r.ok) { showErr('Erro HTTP ' + r.status + '. Tente novamente.'); btn.disabled=false; btn.textContent='Entrar'; return; }
     tok = t;
     startDash();
   } catch(e) {
-    showErr('Erro de conexão: ' + e.message);
-    btn.disabled=false; btn.textContent='Usar Token';
+    clearTimeout(timeout);
+    if (e.name === 'AbortError') {
+      showErr('Tempo esgotado. A API do Oplab não respondeu — verifique sua conexão e tente de novo.');
+    } else {
+      showErr('Erro de conexão: ' + e.message);
+    }
+    btn.disabled=false; btn.textContent='Entrar';
   }
 }
 
@@ -2541,6 +2529,23 @@ function fmtDate(d) {
     return dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'2-digit'});
   } catch(e) { return d; }
 }
+
+// Inicialização: preenche versão e foca no campo de token
+(function init() {
+  function applyVersion() {
+    var vLogin = document.getElementById('app-version-login');
+    var vHeader = document.getElementById('app-version-header');
+    if (vLogin)  vLogin.textContent  = APP_VERSION;
+    if (vHeader) vHeader.textContent = APP_VERSION;
+    var tokenInput = document.getElementById('inp-token');
+    if (tokenInput) tokenInput.focus();
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyVersion);
+  } else {
+    applyVersion();
+  }
+})();
 </script>
 </body>
 </html>
