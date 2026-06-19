@@ -299,7 +299,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
 <script>
 var API = 'https://api.oplab.com.br/v3';
-var APP_VERSION = 'v1.0 · 19/jun/2026';
+var APP_VERSION = 'v1.1 · 19/jun/2026';
 var tok = '';
 var spotData = {};
 var radarData = {};
@@ -1016,10 +1016,16 @@ function renderOportunidades() {
   }).join('');
 
   // ── Tabela DIRECIONAIS ──
-  var dirRows = dirOps.map(function(o) {
-    var best = Math.abs(o.retAnual - maxRetDir) < 0.01;
+  // Separa direcionais em dois grupos e ordena cada um por retorno anualizado
+  var putOps  = dirOps.filter(function(o){ return o.tipo === 'Venda PUT'; }).sort(function(a,b){ return b.retAnual - a.retAnual; });
+  var callOps = dirOps.filter(function(o){ return o.tipo === 'Venda CALL'; }).sort(function(a,b){ return b.retAnual - a.retAnual; });
+  var maxRetPut  = putOps.length  ? Math.max.apply(null, putOps.map(function(o){return o.retAnual;}))  : 0;
+  var maxRetCall = callOps.length ? Math.max.apply(null, callOps.map(function(o){return o.retAnual;})) : 0;
+
+  function dirRow(o, maxRet) {
+    var best = Math.abs(o.retAnual - maxRet) < 0.01;
     return '<tr style="border-bottom:1px solid var(--border)">'
-      + '<td style="padding:7px 6px"><span style="font-family:var(--mono);font-size:11px;font-weight:700;color:' + o.cor + '">' + o.tipo + '</span> <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">' + o.sub + '</span><br><span style="font-family:var(--mono);font-size:8px;color:' + o.cor + '">viés ' + o.vies + '</span></td>'
+      + '<td style="padding:7px 6px;font-family:var(--mono);font-size:9px;color:var(--muted)">' + o.sub + '</td>'
       + '<td style="padding:7px 6px;font-family:var(--mono);font-size:10px;color:var(--muted)">' + fmtDate(o.venc) + '·' + o.dte + 'du</td>'
       + '<td style="padding:7px 6px;font-family:var(--mono);font-size:10px">' + o.op.symbol + '<br>K' + o.strike.toFixed(0) + ' Δ' + o.delta.toFixed(2) + '</td>'
       + '<td style="padding:7px 6px;text-align:right;font-family:var(--mono);font-size:13px;font-weight:700;color:var(--green)">R$' + o.credito.toFixed(2) + '</td>'
@@ -1027,7 +1033,21 @@ function renderOportunidades() {
       + '<td style="padding:7px 6px;text-align:right;font-family:var(--mono);font-size:12px;font-weight:700;color:' + (best?'var(--green)':'var(--text)') + '">' + o.retAnual.toFixed(1) + '%' + (best?' <span style="font-size:8px">★</span>':'') + '</td>'
       + '<td style="padding:7px 6px;text-align:center;font-family:var(--mono);font-size:10px;color:var(--muted)">R$' + o.be.toFixed(2) + '<br><span style="color:' + (o.distSpot<4?'var(--red)':'var(--muted)') + '">' + o.distSpot.toFixed(1) + '%</span></td>'
       + '</tr>';
-  }).join('');
+  }
+
+  function dirTable(ops, maxRet, distLabel) {
+    var head = '<thead><tr style="border-bottom:1px solid var(--border)">'
+      + '<th style="text-align:left;padding:5px;font-size:9px;color:var(--muted)">Delta</th>'
+      + '<th style="text-align:left;padding:5px;font-size:9px;color:var(--muted)">Venc.</th>'
+      + '<th style="text-align:left;padding:5px;font-size:9px;color:var(--muted)">Strike</th>'
+      + '<th style="text-align:right;padding:5px;font-size:9px;color:var(--muted)">Créd/ct</th>'
+      + '<th style="text-align:center;padding:5px;font-size:9px;color:var(--muted)">POP</th>'
+      + '<th style="text-align:right;padding:5px;font-size:9px;color:var(--muted)">Ret.aa</th>'
+      + '<th style="text-align:center;padding:5px;font-size:9px;color:var(--muted)">BE / ' + distLabel + '</th>'
+      + '</tr></thead>';
+    var body = ops.map(function(o){ return dirRow(o, maxRet); }).join('');
+    return '<div class="table-wrap"><table class="otable" style="width:100%;min-width:520px">' + head + '<tbody>' + body + '</tbody></table></div>';
+  }
 
   box.innerHTML =
     '<div style="margin-bottom:10px;font-family:var(--mono);font-size:10px;color:var(--muted)">'
@@ -1047,22 +1067,25 @@ function renderOportunidades() {
     + '<th style="text-align:center;padding:5px;font-size:9px;color:var(--muted)">Breakevens / Dist</th>'
     + '</tr></thead><tbody>' + volRows + '</tbody></table></div>'
 
-    // Direcionais
-    + '<div style="font-family:var(--mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 6px">Direcionais · ordenado por retorno anualizado/risco</div>'
-    + '<div class="table-wrap"><table class="otable" style="width:100%;min-width:560px">'
-    + '<thead><tr style="border-bottom:1px solid var(--border)">'
-    + '<th style="text-align:left;padding:5px;font-size:9px;color:var(--muted)">Direção</th>'
-    + '<th style="text-align:left;padding:5px;font-size:9px;color:var(--muted)">Venc.</th>'
-    + '<th style="text-align:left;padding:5px;font-size:9px;color:var(--muted)">Strike</th>'
-    + '<th style="text-align:right;padding:5px;font-size:9px;color:var(--muted)">Créd/ct</th>'
-    + '<th style="text-align:center;padding:5px;font-size:9px;color:var(--muted)">POP</th>'
-    + '<th style="text-align:right;padding:5px;font-size:9px;color:var(--muted)">Ret.aa</th>'
-    + '<th style="text-align:center;padding:5px;font-size:9px;color:var(--muted)">BE / Dist</th>'
-    + '</tr></thead><tbody>' + dirRows + '</tbody></table></div>'
+    // Direcionais — VENDA DE PUT (viés alta)
+    + '<div style="display:flex;align-items:center;gap:8px;margin:16px 0 6px">'
+    + '<div style="width:10px;height:10px;border-radius:2px;background:var(--green)"></div>'
+    + '<div style="font-family:var(--mono);font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:.06em;font-weight:700">Venda de PUT · viés de ALTA</div>'
+    + '<div style="font-family:var(--mono);font-size:9px;color:var(--muted)">lucra se BOVA11 ficar ACIMA do strike · ordenado por retorno anualizado</div>'
+    + '</div>'
+    + (putOps.length ? dirTable(putOps, maxRetPut, 'Dist↓') : '<div class="empty" style="padding:12px">Sem puts com liquidez.</div>')
 
-    + '<div style="margin-top:10px;font-family:var(--mono);font-size:9px;color:var(--muted);line-height:1.5">'
-    + '<strong>Venda PUT</strong> = viés alta (lucra se ficar acima do strike) · <strong>Venda CALL</strong> = viés baixa (lucra se ficar abaixo) · '
-    + 'POP = prob. estimada de lucro (1−|Δ|) · Ret.aa = retorno anualizado sobre o risco se expirar OTM · '
+    // Direcionais — VENDA DE CALL (viés baixa)
+    + '<div style="display:flex;align-items:center;gap:8px;margin:18px 0 6px">'
+    + '<div style="width:10px;height:10px;border-radius:2px;background:var(--red)"></div>'
+    + '<div style="font-family:var(--mono);font-size:10px;color:var(--red);text-transform:uppercase;letter-spacing:.06em;font-weight:700">Venda de CALL · viés de BAIXA</div>'
+    + '<div style="font-family:var(--mono);font-size:9px;color:var(--muted)">lucra se BOVA11 ficar ABAIXO do strike · ordenado por retorno anualizado</div>'
+    + '</div>'
+    + (callOps.length ? dirTable(callOps, maxRetCall, 'Dist↑') : '<div class="empty" style="padding:12px">Sem calls com liquidez.</div>')
+
+    + '<div style="margin-top:12px;font-family:var(--mono);font-size:9px;color:var(--muted);line-height:1.5">'
+    + 'Código = ticker da opção (use na corretora) · Strike = preço de exercício · POP = prob. estimada de lucro (1−|Δ|) · '
+    + 'Ret.aa = retorno anualizado sobre o risco se expirar OTM · Dist = quanto o spot precisa andar contra você · '
     + 'crédito pelo mid (bid+ask) · ★ = melhor da coluna'
     + '</div>';
 }
@@ -2038,25 +2061,39 @@ function buildSnap() {
       });
 
       s += '\nRADAR DE OPORTUNIDADES — DIRECIONAIS:\n';
+      // Bloco 1: VENDA DE PUT (viés alta)
+      s += '  >> VENDA DE PUT (viés ALTA — lucra acima do strike):\n';
       mensaisSnap.forEach(function(serie) {
-        var calls=[],puts=[];
+        var puts=[];
         (serie.strikes||[]).forEach(function(sk){
-          if(vopt(sk.call)&&sk.strike>=spot*0.8&&sk.strike<=spot*1.2) calls.push(Object.assign({},sk.call,{strike:sk.strike}));
           if(vopt(sk.put)&&sk.strike>=spot*0.8&&sk.strike<=spot*1.2) puts.push(Object.assign({},sk.put,{strike:sk.strike}));
         });
-        if(!calls.length||!puts.length) return;
-        var cO=calls.filter(function(o){return o.strike>spot;}), pO=puts.filter(function(o){return o.strike<spot;});
+        if(!puts.length) return;
+        var pO=puts.filter(function(o){return o.strike<spot;});
         var dte=serie.days_to_maturity;
         [0.15,0.20,0.30].forEach(function(d){
           var p=fbd(pO.length?pO:puts,d);
           if(p){ var crP=gmid(p); var risco=p.strike-crP; var retP=risco>0?(crP/risco)*(252/dte)*100:0;
-            s += '  VENDA PUT (alta) Δ' + (d*100).toFixed(0) + ' ' + fmtDate(serie.due_date) + ' (' + dte + 'du): '
+            s += '    Δ' + (d*100).toFixed(0) + ' ' + fmtDate(serie.due_date) + ' (' + dte + 'du): '
               + p.symbol + ' K' + p.strike.toFixed(0) + ' Δ' + gd(p).toFixed(2) + ' | Créd R$' + crP.toFixed(2)
               + ' | POP ' + ((1-Math.abs(gd(p)))*100).toFixed(0) + '% | Ret.aa ' + retP.toFixed(1) + '% | BE R$' + (p.strike-crP).toFixed(2) + '\n';
           }
+        });
+      });
+      // Bloco 2: VENDA DE CALL (viés baixa)
+      s += '  >> VENDA DE CALL (viés BAIXA — lucra abaixo do strike):\n';
+      mensaisSnap.forEach(function(serie) {
+        var calls=[];
+        (serie.strikes||[]).forEach(function(sk){
+          if(vopt(sk.call)&&sk.strike>=spot*0.8&&sk.strike<=spot*1.2) calls.push(Object.assign({},sk.call,{strike:sk.strike}));
+        });
+        if(!calls.length) return;
+        var cO=calls.filter(function(o){return o.strike>spot;});
+        var dte=serie.days_to_maturity;
+        [0.15,0.20,0.30].forEach(function(d){
           var c=fbd(cO.length?cO:calls,d);
           if(c){ var crC=gmid(c); var retC=(crC/(c.strike-crC))*(252/dte)*100;
-            s += '  VENDA CALL (baixa) Δ' + (d*100).toFixed(0) + ' ' + fmtDate(serie.due_date) + ' (' + dte + 'du): '
+            s += '    Δ' + (d*100).toFixed(0) + ' ' + fmtDate(serie.due_date) + ' (' + dte + 'du): '
               + c.symbol + ' K' + c.strike.toFixed(0) + ' Δ' + gd(c).toFixed(2) + ' | Créd R$' + crC.toFixed(2)
               + ' | POP ' + ((1-Math.abs(gd(c)))*100).toFixed(0) + '% | Ret.aa ' + retC.toFixed(1) + '% | BE R$' + (c.strike+crC).toFixed(2) + '\n';
           }
