@@ -104,7 +104,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .strat-block{margin-bottom:16px}
 .total-bar{display:flex;justify-content:flex-end;padding:10px 0 0;border-top:1px solid var(--border)}
 .total-pnl{font-family:var(--mono);font-size:13px;font-weight:600}
- 
+
 /* CHAT */
 .chat-card-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px}
 #chat-messages{max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;min-height:60px}
@@ -135,14 +135,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .chat-api-row label{font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
 .chat-api-row input{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none;transition:border-color .2s;width:100%}
 .chat-api-row input:focus{border-color:var(--accent)}
- 
+
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 </style>
 </head>
 <body>
- 
+
 <div id="authPanel">
   <div style="text-align:center;padding:24px 0 8px">
     <div class="logo" style="font-size:20px;margin-bottom:4px">TRADING DESK</div>
@@ -160,7 +160,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <button class="btn2" id="btn-token" style="width:100%" onclick="doToken()">Usar Token</button>
   </div>
 </div>
- 
+
 <div class="main" id="dash">
   <div class="header" style="margin:-16px -20px 0;width:calc(100% + 40px)">
     <div style="display:flex;align-items:center;gap:16px">
@@ -174,7 +174,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
       <button class="btn2" onclick="doLogout()" style="font-size:10px;padding:5px 10px">Sair</button>
     </div>
   </div>
- 
+
   <div class="controls" style="margin-top:8px">
     <div style="font-family:var(--mono);font-size:11px;color:var(--muted)">VENCIMENTO:</div>
     <select class="esel" id="esel" onchange="onExpiry()">
@@ -193,7 +193,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     </div>
     <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:auto" id="lupd"></div>
   </div>
- 
+
   <div class="top-row" style="grid-template-columns:1fr 1fr 1fr 1fr">
     <div class="card">
       <div class="ctitle">BOVA11 · Spot <span id="stime"></span></div>
@@ -219,7 +219,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
       <div id="range-box"><div class="loading"><div class="spinner"></div>Aguardando...</div></div>
     </div>
   </div>
- 
+
   <div class="card" id="payoff-card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
       <div class="ctitle" style="margin:0">Payoff · <span id="payoff-active-name">Consolidado</span></div>
@@ -240,7 +240,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     </div>
     <div id="payoff-details" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"></div>
   </div>
- 
+
   <div class="card">
     <div class="ctitle">
       Cadeia de Opções · BOVA11
@@ -251,12 +251,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <!-- Entrada Sugerida -->
     <div id="entrada-box" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)"></div>
   </div>
- 
+
   <div class="card">
     <div class="ctitle">Minhas Estratégias · Posições em Aberto</div>
     <div id="pos-box"><div class="loading"><div class="spinner"></div>Carregando posições...</div></div>
   </div>
- 
+
   <div class="card" id="radar-card">
     <div class="ctitle">
       Radar de Decisão
@@ -268,7 +268,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     </div>
     <div id="radar-box"><div class="loading"><div class="spinner"></div>Carregando radar...</div></div>
   </div>
- 
+
   <div class="card" id="oportunidades-card">
     <div class="ctitle">
       Radar de Oportunidades
@@ -276,7 +276,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     </div>
     <div id="oportunidades-box"><div class="loading"><div class="spinner"></div>Analisando oportunidades...</div></div>
   </div>
- 
+
   <div class="chat-card-wrap">
     <div class="ctitle" style="margin:0 0 4px">Chat · Analise com Claude <span style="color:var(--muted);font-size:9px;font-weight:400">os dados do dashboard sao enviados automaticamente</span></div>
     <div class="chat-api-row">
@@ -289,7 +289,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
       <button class="chat-send-btn" id="chat-send-btn" onclick="sendChat()">Analisar →</button>
     </div>
   </div>
- 
+
   <div class="snap">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div class="ctitle" style="margin:0">Snapshot para Claude</div>
@@ -298,7 +298,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div class="snapout" id="snapout">Clique em "Atualizar" para gerar o snapshot...</div>
   </div>
 </div>
- 
+
 <script>
 var API = 'https://api.oplab.com.br/v3';
 var tok = '';
@@ -311,7 +311,7 @@ var curPositions = [];
 var portfolioId = null;
 var activeTab = 'puts';
 var autoTimer = null;
- 
+
 function showErr(m) {
   var e = document.getElementById('errmsg');
   e.textContent = m;
@@ -320,7 +320,7 @@ function showErr(m) {
 function clearErr() {
   document.getElementById('errmsg').style.display = 'none';
 }
- 
+
 async function doLogin() {
   var email = document.getElementById('inp-email').value.trim();
   var pass = document.getElementById('inp-pass').value;
@@ -344,7 +344,7 @@ async function doLogin() {
     btn.disabled=false; btn.textContent='Entrar';
   }
 }
- 
+
 async function doToken() {
   var t = document.getElementById('inp-token').value.trim();
   if (!t) { showErr('Cole um token válido.'); return; }
@@ -365,7 +365,7 @@ async function doToken() {
     btn.disabled=false; btn.textContent='Usar Token';
   }
 }
- 
+
 function doLogout() {
   tok=''; portfolioId=null; curPositions=[]; curOptions=[];
   if (autoTimer) clearInterval(autoTimer);
@@ -373,23 +373,23 @@ function doLogout() {
   document.getElementById('authPanel').style.display = 'block';
   document.getElementById('dash').classList.remove('active');
 }
- 
+
 async function startDash() {
   document.getElementById('authPanel').style.display = 'none';
   document.getElementById('dash').classList.add('active');
   await refreshAll();
 }
- 
+
 function hdr() {
   return { 'Access-Token': tok, 'Content-Type': 'application/json' };
 }
- 
+
 async function apig(path) {
   var r = await fetch(API + path, { headers: hdr() });
   if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + path);
   return r.json();
 }
- 
+
 async function refreshAll() {
   var ico = document.getElementById('rico');
   ico.style.animation = 'spin .8s linear infinite';
@@ -402,7 +402,7 @@ async function refreshAll() {
   ico.style.animation = '';
   document.getElementById('lupd').textContent = 'Atualizado: ' + new Date().toLocaleTimeString('pt-BR');
 }
- 
+
 async function loadStatus() {
   try {
     var d = await apig('/market/status');
@@ -422,7 +422,7 @@ async function loadStatus() {
     document.getElementById('stxt').textContent = open ? 'Mercado Aberto' : 'Mercado Fechado';
   }
 }
- 
+
 function isB3Open() {
   // Horário de Brasília (UTC-3). Pregão B3: seg-sex, 10h-18h (incluindo after um pouco)
   var now = new Date();
@@ -435,7 +435,7 @@ function isB3Open() {
   if (dow === 0 || dow === 6) return false;       // fim de semana
   return timeDec >= 10 && timeDec < 18.0;          // pregão regular
 }
- 
+
 async function loadSpot() {
   try {
     var d = await apig('/market/quote?tickers=BOVA11');
@@ -461,7 +461,7 @@ async function loadSpot() {
     document.getElementById('stime').textContent = new Date().toLocaleTimeString('pt-BR');
   } catch(e) { document.getElementById('bprice').textContent = 'Erro'; }
 }
- 
+
 async function loadVolatility() {
   try {
     var d = await apig('/market/stocks/BOVA11');
@@ -470,7 +470,7 @@ async function loadVolatility() {
     document.getElementById('vol-box').innerHTML = '<div class="empty">Erro: ' + e.message + '</div>';
   }
 }
- 
+
 function renderVolatility(d) {
   var ivCur  = d.iv_current        || 0;
   var ivMax  = d.iv_1y_max         || 0;
@@ -483,16 +483,16 @@ function renderVolatility(d) {
   radarData.ivPct  = ivPct;
   radarData.ivCur  = ivCur;
   radarData.hvCur  = hvCur;
- 
+
   function rankBar(val, color) {
     var pct = Math.min(100, Math.max(0, val));
     return '<div style="background:var(--surface2);border-radius:3px;height:5px;margin-top:3px;overflow:hidden">'
       + '<div style="width:' + pct + '%;height:100%;background:' + color + ';border-radius:3px"></div>'
       + '</div>';
   }
- 
+
   var rankColor = ivRank < 30 ? 'var(--green)' : ivRank > 70 ? 'var(--red)' : 'var(--yellow)';
- 
+
   document.getElementById('vol-period').textContent = '1A';
   document.getElementById('vol-box').innerHTML =
     '<div style="margin-bottom:10px">'
@@ -521,9 +521,9 @@ function renderVolatility(d) {
     + rankBar(ivPct, rankColor)
     + '</div>';
 }
- 
+
 // ─── GREGAS ──────────────────────────────────────────────────────────────────
- 
+
 function onVxbrInput(val) {
   var v = parseFloat(val) || 0;
   radarData.vxbr = v;
@@ -537,11 +537,11 @@ function onVxbrInput(val) {
   // Atualiza radar se estiver visível
   renderRadar(radarActiveTab);
 }
- 
+
 function buildGreeksCache() {
   var cache = {};
   if (!seriesInfo || !seriesInfo.series) return cache;
- 
+
   seriesInfo.series.forEach(function(serie) {
     (serie.strikes || []).forEach(function(sk) {
       ['call','put'].forEach(function(side) {
@@ -563,7 +563,7 @@ function buildGreeksCache() {
   });
   return cache;
 }
- 
+
 // Black-Scholes local: calcula gregas quando a API não fornece
 function bsGreeks(spot, strike, dte_days, iv, isCall) {
   if (!spot || !strike || !iv || dte_days <= 0) return null;
@@ -591,8 +591,8 @@ function bsGreeks(spot, strike, dte_days, iv, isCall) {
   var vega  = spot*normPDF(d1)*sqrtT / 100; // por 1% de vol
   return { delta: delta, theta: theta, gamma: gamma, vega: vega };
 }
- 
- 
+
+
 function calcPositionGreeks(legs) {
   var cache = buildGreeksCache();
   var spot = spotData.close || 0;
@@ -602,7 +602,7 @@ function calcPositionGreeks(legs) {
   else if (ivRaw >= 3 && ivRaw < 200) ivCurrent = ivRaw;
   else if (ivRaw >= 200)              ivCurrent = ivRaw / 100;
   else                                ivCurrent = 18;
- 
+
   // IV de referência por strike: a mais alta entre call e put (a degenerada é artificialmente baixa).
   // Pela paridade put-call, ambas DEVEM ter a mesma IV — então uso uma só para o par.
   var ivByStrike = {};
@@ -616,7 +616,7 @@ function calcPositionGreeks(legs) {
       });
     });
   }
- 
+
   var g = { delta:0, theta:0, gamma:0, vega:0, found:0 };
   legs.forEach(function(leg) {
     var qty = leg.amount || 0;
@@ -628,10 +628,10 @@ function calcPositionGreeks(legs) {
     var strike  = leg.strike || 0;
     var dueDate = leg['due-date'] || '';
     var og      = cache[sym];
- 
+
     // Prioridade 1: gregas da API (mesma fonte que alimenta a tela do Oplab)
     var hasApi = og && (Math.abs(og.delta) > 0.0001 || Math.abs(og.gamma) > 0.0000001 || Math.abs(og.vega) > 0.0001);
- 
+
     if (hasApi) {
       g.delta += og.delta * qty * sign;
       g.theta += og.theta * qty * sign;
@@ -657,7 +657,7 @@ function calcPositionGreeks(legs) {
   });
   return g;
 }
- 
+
 function renderGreeksRow(g, showLabel) {
   if (!g || g.found === 0) return '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);padding:8px 0">Gregas: aguardando dados da cadeia de opcoes</div>';
   var dColor = Math.abs(g.delta) < 50 ? 'var(--green)' : Math.abs(g.delta) < 150 ? 'var(--yellow)' : 'var(--red)';
@@ -678,7 +678,7 @@ function renderGreeksRow(g, showLabel) {
     + gItem('ν Vega',    g.vega,  vColor, 'int')
     + '</div>';
 }
- 
+
 function isMonthlyExpiry(dateStr) {
   if (!dateStr) return false;
   try {
@@ -689,7 +689,7 @@ function isMonthlyExpiry(dateStr) {
     return dow === 5 && day >= 15 && day <= 21;
   } catch(e) { return true; }
 }
- 
+
 async function loadSeries() {
   try {
     var d = await apig('/market/instruments/series/BOVA11?bs=true&irate=0.1075');
@@ -705,7 +705,7 @@ async function loadSeries() {
     document.getElementById('esel').innerHTML = series.map(function(s) {
       return '<option value="' + s.due_date + '">' + fmtDate(s.due_date) + ' · ' + s.days_to_maturity + 'du</option>';
     }).join('');
- 
+
     // Abas dos 3 primeiros vencimentos mensais na cadeia
     var top3 = series.slice(0, 3);
     var tabsEl = document.getElementById('chain-expiry-tabs');
@@ -717,7 +717,7 @@ async function loadSeries() {
     }
     // Carrega o primeiro vencimento
     if (top3.length > 0) await loadChainExpiry(top3[0].due_date);
- 
+
     // Atualiza Faixa de Preço com o primeiro vencimento
     await onExpiry();
   } catch(e) {
@@ -725,13 +725,13 @@ async function loadSeries() {
     document.getElementById('chain-box').innerHTML = '<div class="empty">Erro: ' + e.message + '</div>';
   }
 }
- 
+
 function selectChainExpiry(dueDate, el) {
   document.querySelectorAll('#chain-expiry-tabs .tab').forEach(function(t){ t.classList.remove('active'); });
   if (el) el.classList.add('active');
   loadChainExpiry(dueDate);
 }
- 
+
 // Achata uma opção da API: traz bs.{delta,gamma,vega,theta,volatility} para o nível raiz
 function flattenOption(o, extra) {
   var bs = o.bs || {};
@@ -745,12 +745,12 @@ function flattenOption(o, extra) {
   flat.poe = bs.poe != null ? bs.poe : null;
   return flat;
 }
- 
+
 function loadChainExpiry(dueDate) {
   if (!seriesInfo.series) return;
   var serie = seriesInfo.series.find(function(s){ return s.due_date === dueDate; });
   if (!serie) return;
- 
+
   // Flatten options (traz gregas de bs.* para o nível raiz)
   var flat = [];
   (serie.strikes || []).forEach(function(sk) {
@@ -764,7 +764,7 @@ function loadChainExpiry(dueDate) {
   if (curPositions.length > 0) renderPnl(curPositions);
   if (payoffTabs.length > 0)   refreshMetrics(activePayoffIdx);
 }
- 
+
 async function onExpiry() {
   var expiry = document.getElementById('esel').value;
   if (!expiry || !seriesInfo.series) return;
@@ -778,7 +778,7 @@ async function onExpiry() {
   });
   renderRange(flat, serie);
 }
- 
+
 function renderChainOplab(options, serie) {
   var spot = spotData.close || 0;
   // Agrupa por strike
@@ -790,16 +790,16 @@ function renderChainOplab(options, serie) {
     if (o.category === 'PUT')  strikeMap[k].put  = o;
   });
   var strikes = Object.keys(strikeMap).map(Number).sort(function(a,b){ return a-b; });
- 
+
   // Filtra strikes relevantes: spot ± 15%
   var lo = spot * 0.85, hi = spot * 1.15;
   strikes = strikes.filter(function(k){ return k >= lo && k <= hi; });
- 
+
   if (!strikes.length) {
     document.getElementById('chain-box').innerHTML = '<div class="empty">Nenhuma opção encontrada.</div>';
     return;
   }
- 
+
   function oCell(o, side) {
     if (!o) return '<td colspan="4" style="color:var(--border)">—</td>';
     var delta = o.delta || (o.greeks && o.greeks.delta) || 0;
@@ -821,23 +821,23 @@ function renderChainOplab(options, serie) {
            + '<td style="color:var(--muted);font-size:10px">' + (o.symbol||'') + '</td>';
     }
   }
- 
+
   var rows = strikes.map(function(k) {
     var row = strikeMap[k];
     var isATM = spot > 0 && Math.abs(k - spot) <= 0.5;
     var isStraddle = spot > 0 && Math.abs(k - spot) <= 2.0;
- 
+
     // Marca delta 20/25 para strangle
     var callD = row.call ? Math.abs(row.call.delta || 0) : 0;
     var putD  = row.put  ? Math.abs(row.put.delta  || 0) : 0;
     var isCallStrangle = callD >= 0.18 && callD <= 0.27;
     var isPutStrangle  = putD  >= 0.18 && putD  <= 0.27;
- 
+
     var rowClass = isATM ? 'atm' : '';
     var strikeTd = '<td style="font-family:var(--mono);font-weight:700;font-size:13px;text-align:center;'
       + (isATM ? 'color:var(--accent);background:rgba(0,212,255,0.08)' : 'color:var(--text)')
       + '">' + k.toFixed(2) + (isATM ? ' ★' : '') + '</td>';
- 
+
     return '<tr class="' + rowClass + '">'
       + '<td style="width:8px;padding:0;background:' + (isCallStrangle?'rgba(0,230,118,0.15)':'transparent') + '"></td>'
       + oCell(row.call, 'call')
@@ -846,7 +846,7 @@ function renderChainOplab(options, serie) {
       + '<td style="width:8px;padding:0;background:' + (isPutStrangle?'rgba(0,230,118,0.15)':'transparent') + '"></td>'
       + '</tr>';
   }).join('');
- 
+
   document.getElementById('chain-box').innerHTML =
     '<div class="table-wrap">'
     + '<table class="otable" style="min-width:500px">'
@@ -878,7 +878,7 @@ function renderChainOplab(options, serie) {
     + '</div>'
     + '</div>';
 }
- 
+
 function renderOportunidades() {
   var box = document.getElementById('oportunidades-box');
   if (!box) return;
@@ -887,24 +887,17 @@ function renderOportunidades() {
     box.innerHTML = '<div class="empty">Aguardando dados de mercado.</div>';
     return;
   }
- 
-  // Pega os 3 primeiros vencimentos mensais com DTE >= 21
+
+  // 3 vencimentos mensais imediatamente seguintes, com piso de 10 DU
   var mensais = seriesInfo.series
-    .filter(function(s){ return isMonthlyExpiry(s.due_date) && s.days_to_maturity >= 21; })
+    .filter(function(s){ return isMonthlyExpiry(s.due_date) && s.days_to_maturity >= 10; })
     .slice(0, 3);
- 
+
   if (!mensais.length) {
-    box.innerHTML = '<div class="empty">Nenhum vencimento mensal com 21+ DU disponível.</div>';
+    box.innerHTML = '<div class="empty">Nenhum vencimento mensal com 10+ DU disponível.</div>';
     return;
   }
- 
-  function normIv(raw) {
-    raw = parseFloat(raw);
-    if (!raw || raw <= 0 || isNaN(raw)) return 0;
-    if (raw < 3) return raw * 100;
-    if (raw < 200) return raw;
-    return raw / 100;
-  }
+
   function getDelta(o) { return o.bs ? (o.bs.delta || 0) : 0; }
   function getMid(o) {
     var bid = o.bid || 0, ask = o.ask || 0;
@@ -915,9 +908,23 @@ function renderOportunidades() {
     return o && o.symbol && (o.bid > 0) && o.bs &&
            Math.abs(o.bs.delta || 0) >= 0.05 && Math.abs(o.bs.delta || 0) <= 0.95;
   }
- 
-  var oportunidades = [];
- 
+  function findByDelta(list, target) {
+    if (!list.length) return null;
+    return list.slice().sort(function(a,b){
+      return Math.abs(Math.abs(getDelta(a))-target) - Math.abs(Math.abs(getDelta(b))-target);
+    })[0];
+  }
+  // Retorno anualizado sobre o risco (para direcionais): credito / (strike - credito) annualizado
+  function retAnual(credito, strike, dte) {
+    var risco = strike - credito;
+    if (risco <= 0 || dte <= 0) return 0;
+    var ret = credito / risco;          // retorno se expirar OTM
+    return ret * (252 / dte) * 100;     // anualizado em %
+  }
+
+  var volOps = [];   // straddles e strangles
+  var dirOps = [];   // direcionais (put / call vendidas)
+
   mensais.forEach(function(serie) {
     var dte = serie.days_to_maturity;
     var calls = [], puts = [];
@@ -928,130 +935,156 @@ function renderOportunidades() {
         puts.push(Object.assign({}, sk.put, { strike: sk.strike }));
     });
     if (!calls.length || !puts.length) return;
- 
-    function findByDelta(list, target) {
-      return list.slice().sort(function(a,b){
-        return Math.abs(Math.abs(getDelta(a))-target) - Math.abs(Math.abs(getDelta(b))-target);
-      })[0];
-    }
- 
-    // STRADDLE: call e put ATM (delta ~0.50)
+
+    // ── VOLATILIDADE: 1 straddle + 3 strangles (deltas 15, 22, 30) ──
     var sCall = findByDelta(calls, 0.50);
     var sPut  = findByDelta(puts, 0.50);
     if (sCall && sPut) {
-      var credito = getMid(sCall) + getMid(sPut);
-      var beInf = sCall.strike - credito;
-      var beSup = sCall.strike + credito;
-      // POP straddle ≈ 1 - (|delta call| + |delta put|) ... mas para ATM usamos largura do BE
-      var pop = Math.max(0, 1 - Math.abs(getDelta(sCall)) - Math.abs(getDelta(sPut)));
-      oportunidades.push({
-        tipo: 'Straddle', cor: 'var(--yellow)',
-        venc: serie.due_date, dte: dte,
-        call: sCall, put: sPut, credito: credito,
-        beInf: beInf, beSup: beSup, pop: pop,
-        larguraBE: beSup - beInf,
-        risco: 'Ilimitado'
+      var cr = getMid(sCall) + getMid(sPut);
+      volOps.push({
+        tipo: 'Straddle', sub: 'ATM', cor: 'var(--yellow)',
+        venc: serie.due_date, dte: dte, call: sCall, put: sPut, credito: cr,
+        beInf: sCall.strike - cr, beSup: sCall.strike + cr,
+        pop: Math.max(0, 1 - Math.abs(getDelta(sCall)) - Math.abs(getDelta(sPut)))
       });
     }
- 
-    // STRANGLE: call delta ~0.22 acima do spot, put delta ~0.22 abaixo
     var callsOtm = calls.filter(function(o){ return o.strike > spot; });
     var putsOtm  = puts.filter(function(o){ return o.strike < spot; });
-    var gCall = findByDelta(callsOtm.length ? callsOtm : calls, 0.22);
-    var gPut  = findByDelta(putsOtm.length ? putsOtm : puts, 0.22);
-    if (gCall && gPut && gCall.strike !== gPut.strike) {
-      var credito2 = getMid(gCall) + getMid(gPut);
-      var beInf2 = gPut.strike - credito2;
-      var beSup2 = gCall.strike + credito2;
-      var pop2 = Math.max(0, 1 - Math.abs(getDelta(gCall)) - Math.abs(getDelta(gPut)));
-      oportunidades.push({
-        tipo: 'Strangle', cor: 'var(--accent)',
-        venc: serie.due_date, dte: dte,
-        call: gCall, put: gPut, credito: credito2,
-        beInf: beInf2, beSup: beSup2, pop: pop2,
-        larguraBE: beSup2 - beInf2,
-        risco: 'Ilimitado'
-      });
-    }
+    [{d:0.15,n:'Δ15'},{d:0.22,n:'Δ22'},{d:0.30,n:'Δ30'}].forEach(function(lvl) {
+      var gc = findByDelta(callsOtm.length ? callsOtm : calls, lvl.d);
+      var gp = findByDelta(putsOtm.length ? putsOtm : puts, lvl.d);
+      if (gc && gp && gc.strike !== gp.strike) {
+        var cr2 = getMid(gc) + getMid(gp);
+        volOps.push({
+          tipo: 'Strangle', sub: lvl.n, cor: 'var(--accent)',
+          venc: serie.due_date, dte: dte, call: gc, put: gp, credito: cr2,
+          beInf: gp.strike - cr2, beSup: gc.strike + cr2,
+          pop: Math.max(0, 1 - Math.abs(getDelta(gc)) - Math.abs(getDelta(gp)))
+        });
+      }
+    });
+
+    // ── DIRECIONAIS: put vendida (alta) e call vendida (baixa), deltas 15/20/30 ──
+    [{d:0.15,n:'Δ15'},{d:0.20,n:'Δ20'},{d:0.30,n:'Δ30'}].forEach(function(lvl) {
+      // PUT vendida (viés ALTA) — strikes abaixo do spot
+      var p = findByDelta(putsOtm.length ? putsOtm : puts, lvl.d);
+      if (p) {
+        var crP = getMid(p);
+        var beP = p.strike - crP;
+        dirOps.push({
+          tipo: 'Venda PUT', vies: 'ALTA', sub: lvl.n, cor: 'var(--green)',
+          venc: serie.due_date, dte: dte, op: p, credito: crP,
+          strike: p.strike, be: beP, delta: Math.abs(getDelta(p)),
+          pop: Math.max(0, 1 - Math.abs(getDelta(p))),
+          distSpot: (spot - p.strike) / spot * 100,
+          retAnual: retAnual(crP, p.strike, dte)
+        });
+      }
+      // CALL vendida (viés BAIXA) — strikes acima do spot
+      var c = findByDelta(callsOtm.length ? callsOtm : calls, lvl.d);
+      if (c) {
+        var crC = getMid(c);
+        var beC = c.strike + crC;
+        dirOps.push({
+          tipo: 'Venda CALL', vies: 'BAIXA', sub: lvl.n, cor: 'var(--red)',
+          venc: serie.due_date, dte: dte, op: c, credito: crC,
+          strike: c.strike, be: beC, delta: Math.abs(getDelta(c)),
+          pop: Math.max(0, 1 - Math.abs(getDelta(c))),
+          distSpot: (c.strike - spot) / spot * 100,
+          retAnual: retAnual(crC, c.strike, dte)
+        });
+      }
+    });
   });
- 
-  if (!oportunidades.length) {
+
+  if (!volOps.length && !dirOps.length) {
     box.innerHTML = '<div class="empty">Sem oportunidades com liquidez suficiente no momento.</div>';
     return;
   }
- 
-  // Ordena por crédito (prioridade 1), depois POP, depois largura BE
-  oportunidades.sort(function(a,b){
-    if (Math.abs(b.credito - a.credito) > 0.01) return b.credito - a.credito;
-    if (Math.abs(b.pop - a.pop) > 0.01) return b.pop - a.pop;
-    return b.larguraBE - a.larguraBE;
-  });
- 
-  // Melhor crédito e melhor POP para destacar
-  var maxCredito = Math.max.apply(null, oportunidades.map(function(o){ return o.credito; }));
-  var maxPop = Math.max.apply(null, oportunidades.map(function(o){ return o.pop; }));
- 
+
+  // Ordena vol por crédito; direcionais por retorno anualizado
+  volOps.sort(function(a,b){ return b.credito - a.credito; });
+  dirOps.sort(function(a,b){ return b.retAnual - a.retAnual; });
+
+  var maxCredVol = volOps.length ? Math.max.apply(null, volOps.map(function(o){return o.credito;})) : 0;
+  var maxRetDir  = dirOps.length ? Math.max.apply(null, dirOps.map(function(o){return o.retAnual;})) : 0;
   var zone = getVxbrZone(radarData.vxbr || (radarData.ivCur || 0) || 0);
- 
-  var rows = oportunidades.map(function(o) {
-    var distInf = ((spot - o.beInf) / spot * 100);
-    var distSup = ((o.beSup - spot) / spot * 100);
-    var isBestCredito = Math.abs(o.credito - maxCredito) < 0.01;
-    var isBestPop = Math.abs(o.pop - maxPop) < 0.01;
-    var creditoTotal4500 = o.credito * 4500; // estimativa para mão cheia de referência
- 
+
+  // ── Tabela VOLATILIDADE ──
+  var volRows = volOps.map(function(o) {
+    var distInf = (spot - o.beInf) / spot * 100;
+    var distSup = (o.beSup - spot) / spot * 100;
+    var best = Math.abs(o.credito - maxCredVol) < 0.01;
     return '<tr style="border-bottom:1px solid var(--border)">'
-      + '<td style="padding:8px 6px"><span style="font-family:var(--mono);font-size:11px;font-weight:700;color:' + o.cor + '">' + o.tipo + '</span></td>'
-      + '<td style="padding:8px 6px;font-family:var(--mono);font-size:10px;color:var(--muted)">' + fmtDate(o.venc) + '<br>' + o.dte + 'du</td>'
-      + '<td style="padding:8px 6px;font-family:var(--mono);font-size:10px">'
-        + '<span style="color:var(--green)">C ' + o.call.symbol + '</span> K' + o.call.strike.toFixed(0) + ' Δ' + getDelta(o.call).toFixed(2) + '<br>'
-        + '<span style="color:var(--red)">P ' + o.put.symbol + '</span> K' + o.put.strike.toFixed(0) + ' Δ' + getDelta(o.put).toFixed(2)
-        + '</td>'
-      + '<td style="padding:8px 6px;text-align:right">'
-        + '<span style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--green)">R$ ' + o.credito.toFixed(2) + '</span>'
-        + (isBestCredito ? '<br><span style="font-family:var(--mono);font-size:8px;color:var(--green);font-weight:700">★ MAIOR</span>' : '')
-        + '</td>'
-      + '<td style="padding:8px 6px;text-align:center">'
-        + '<span style="font-family:var(--mono);font-size:13px;font-weight:700;color:' + (o.pop >= 0.6 ? 'var(--green)' : o.pop >= 0.5 ? 'var(--yellow)' : 'var(--red)') + '">' + (o.pop*100).toFixed(0) + '%</span>'
-        + (isBestPop ? '<br><span style="font-family:var(--mono);font-size:8px;color:var(--green);font-weight:700">★ MAIOR</span>' : '')
-        + '</td>'
-      + '<td style="padding:8px 6px;font-family:var(--mono);font-size:10px;text-align:center">'
-        + '<span style="color:var(--red)">R$' + o.beInf.toFixed(2) + '</span><br>'
-        + '<span style="color:var(--green)">R$' + o.beSup.toFixed(2) + '</span>'
-        + '</td>'
-      + '<td style="padding:8px 6px;font-family:var(--mono);font-size:10px;text-align:center">'
-        + '<span style="color:' + (distInf < 4 ? 'var(--red)' : 'var(--muted)') + '">-' + distInf.toFixed(1) + '%</span><br>'
-        + '<span style="color:' + (distSup < 4 ? 'var(--red)' : 'var(--muted)') + '">+' + distSup.toFixed(1) + '%</span>'
-        + '</td>'
+      + '<td style="padding:7px 6px"><span style="font-family:var(--mono);font-size:11px;font-weight:700;color:' + o.cor + '">' + o.tipo + '</span> <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">' + o.sub + '</span></td>'
+      + '<td style="padding:7px 6px;font-family:var(--mono);font-size:10px;color:var(--muted)">' + fmtDate(o.venc) + '·' + o.dte + 'du</td>'
+      + '<td style="padding:7px 6px;font-family:var(--mono);font-size:10px">'
+        + '<span style="color:var(--green)">C</span>K' + o.call.strike.toFixed(0) + ' Δ' + getDelta(o.call).toFixed(2)
+        + ' <span style="color:var(--red)">P</span>K' + o.put.strike.toFixed(0) + ' Δ' + getDelta(o.put).toFixed(2) + '</td>'
+      + '<td style="padding:7px 6px;text-align:right"><span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--green)">R$' + o.credito.toFixed(2) + '</span>' + (best?' <span style="font-size:8px;color:var(--green)">★</span>':'') + '</td>'
+      + '<td style="padding:7px 6px;text-align:center;font-family:var(--mono);font-size:12px;font-weight:700;color:' + (o.pop>=0.6?'var(--green)':o.pop>=0.5?'var(--yellow)':'var(--red)') + '">' + (o.pop*100).toFixed(0) + '%</td>'
+      + '<td style="padding:7px 6px;font-family:var(--mono);font-size:9px;text-align:center;color:var(--muted)">R$' + o.beInf.toFixed(2) + ' / R$' + o.beSup.toFixed(2) + '<br><span style="color:' + (Math.min(distInf,distSup)<4?'var(--red)':'var(--muted)') + '">-' + distInf.toFixed(1) + '% / +' + distSup.toFixed(1) + '%</span></td>'
       + '</tr>';
   }).join('');
- 
+
+  // ── Tabela DIRECIONAIS ──
+  var dirRows = dirOps.map(function(o) {
+    var best = Math.abs(o.retAnual - maxRetDir) < 0.01;
+    return '<tr style="border-bottom:1px solid var(--border)">'
+      + '<td style="padding:7px 6px"><span style="font-family:var(--mono);font-size:11px;font-weight:700;color:' + o.cor + '">' + o.tipo + '</span> <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">' + o.sub + '</span><br><span style="font-family:var(--mono);font-size:8px;color:' + o.cor + '">viés ' + o.vies + '</span></td>'
+      + '<td style="padding:7px 6px;font-family:var(--mono);font-size:10px;color:var(--muted)">' + fmtDate(o.venc) + '·' + o.dte + 'du</td>'
+      + '<td style="padding:7px 6px;font-family:var(--mono);font-size:10px">' + o.op.symbol + '<br>K' + o.strike.toFixed(0) + ' Δ' + o.delta.toFixed(2) + '</td>'
+      + '<td style="padding:7px 6px;text-align:right;font-family:var(--mono);font-size:13px;font-weight:700;color:var(--green)">R$' + o.credito.toFixed(2) + '</td>'
+      + '<td style="padding:7px 6px;text-align:center;font-family:var(--mono);font-size:12px;font-weight:700;color:' + (o.pop>=0.75?'var(--green)':o.pop>=0.65?'var(--yellow)':'var(--red)') + '">' + (o.pop*100).toFixed(0) + '%</td>'
+      + '<td style="padding:7px 6px;text-align:right;font-family:var(--mono);font-size:12px;font-weight:700;color:' + (best?'var(--green)':'var(--text)') + '">' + o.retAnual.toFixed(1) + '%' + (best?' <span style="font-size:8px">★</span>':'') + '</td>'
+      + '<td style="padding:7px 6px;text-align:center;font-family:var(--mono);font-size:10px;color:var(--muted)">R$' + o.be.toFixed(2) + '<br><span style="color:' + (o.distSpot<4?'var(--red)':'var(--muted)') + '">' + o.distSpot.toFixed(1) + '%</span></td>'
+      + '</tr>';
+  }).join('');
+
   box.innerHTML =
     '<div style="margin-bottom:10px;font-family:var(--mono);font-size:10px;color:var(--muted)">'
     + 'Spot R$ ' + spot.toFixed(2) + ' · Zona VXBR: <span style="color:' + zone.color + ';font-weight:600">' + zone.label + '</span>'
-    + ' · Mão sugerida: <span style="color:' + zone.color + '">' + zone.sizeLabel + '</span>'
+    + ' · Mão: <span style="color:' + zone.color + '">' + zone.sizeLabel + '</span>'
     + '</div>'
+
+    // Volatilidade
+    + '<div style="font-family:var(--mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin:4px 0 6px">Venda de Volatilidade · ordenado por crédito</div>'
     + '<div class="table-wrap"><table class="otable" style="width:100%;min-width:560px">'
     + '<thead><tr style="border-bottom:1px solid var(--border)">'
-    + '<th style="text-align:left;padding:6px;font-size:9px;color:var(--muted)">Estrutura</th>'
-    + '<th style="text-align:left;padding:6px;font-size:9px;color:var(--muted)">Venc.</th>'
-    + '<th style="text-align:left;padding:6px;font-size:9px;color:var(--muted)">Pernas</th>'
-    + '<th style="text-align:right;padding:6px;font-size:9px;color:var(--muted)">Crédito/ct</th>'
-    + '<th style="text-align:center;padding:6px;font-size:9px;color:var(--muted)">POP</th>'
-    + '<th style="text-align:center;padding:6px;font-size:9px;color:var(--muted)">Breakevens</th>'
-    + '<th style="text-align:center;padding:6px;font-size:9px;color:var(--muted)">Dist. BE</th>'
-    + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
-    + '<div style="margin-top:8px;font-family:var(--mono);font-size:9px;color:var(--muted)">'
-    + 'Crédito por contrato (mid bid/ask) · POP = probabilidade estimada de lucro no vencimento · ordenado por maior crédito · risco ilimitado em todas (venda descoberta)'
+    + '<th style="text-align:left;padding:5px;font-size:9px;color:var(--muted)">Estrutura</th>'
+    + '<th style="text-align:left;padding:5px;font-size:9px;color:var(--muted)">Venc.</th>'
+    + '<th style="text-align:left;padding:5px;font-size:9px;color:var(--muted)">Pernas</th>'
+    + '<th style="text-align:right;padding:5px;font-size:9px;color:var(--muted)">Créd/ct</th>'
+    + '<th style="text-align:center;padding:5px;font-size:9px;color:var(--muted)">POP</th>'
+    + '<th style="text-align:center;padding:5px;font-size:9px;color:var(--muted)">Breakevens / Dist</th>'
+    + '</tr></thead><tbody>' + volRows + '</tbody></table></div>'
+
+    // Direcionais
+    + '<div style="font-family:var(--mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 6px">Direcionais · ordenado por retorno anualizado/risco</div>'
+    + '<div class="table-wrap"><table class="otable" style="width:100%;min-width:560px">'
+    + '<thead><tr style="border-bottom:1px solid var(--border)">'
+    + '<th style="text-align:left;padding:5px;font-size:9px;color:var(--muted)">Direção</th>'
+    + '<th style="text-align:left;padding:5px;font-size:9px;color:var(--muted)">Venc.</th>'
+    + '<th style="text-align:left;padding:5px;font-size:9px;color:var(--muted)">Strike</th>'
+    + '<th style="text-align:right;padding:5px;font-size:9px;color:var(--muted)">Créd/ct</th>'
+    + '<th style="text-align:center;padding:5px;font-size:9px;color:var(--muted)">POP</th>'
+    + '<th style="text-align:right;padding:5px;font-size:9px;color:var(--muted)">Ret.aa</th>'
+    + '<th style="text-align:center;padding:5px;font-size:9px;color:var(--muted)">BE / Dist</th>'
+    + '</tr></thead><tbody>' + dirRows + '</tbody></table></div>'
+
+    + '<div style="margin-top:10px;font-family:var(--mono);font-size:9px;color:var(--muted);line-height:1.5">'
+    + '<strong>Venda PUT</strong> = viés alta (lucra se ficar acima do strike) · <strong>Venda CALL</strong> = viés baixa (lucra se ficar abaixo) · '
+    + 'POP = prob. estimada de lucro (1−|Δ|) · Ret.aa = retorno anualizado sobre o risco se expirar OTM · '
+    + 'crédito pelo mid (bid+ask) · ★ = melhor da coluna'
     + '</div>';
 }
- 
+
 function renderEntradaSugerida(options, serie) {
   var box = document.getElementById('entrada-box');
   if (!box) return;
   var spot = spotData.close || 0;
   var dte  = serie ? (serie.days_to_maturity || 0) : 0;
- 
+
   if (!spot || !options.length || dte < 21) {
     box.style.display = 'block';
     box.innerHTML = '<div style="background:rgba(255,61,87,0.1);border:1px solid var(--red);border-radius:8px;padding:12px;font-family:var(--mono);font-size:12px;color:var(--red)">'
@@ -1059,14 +1092,14 @@ function renderEntradaSugerida(options, serie) {
       + '</div>';
     return;
   }
- 
+
   function validOpt(o) {
     var bid   = o.bid || 0;
     var delta = Math.abs(o.delta || (o.greeks&&o.greeks.delta) || 0);
     var k     = o.strike || 0;
     return bid > 0 && delta >= 0.05 && delta <= 0.95 && k >= spot*0.80 && k <= spot*1.20;
   }
- 
+
   var calls = options.filter(function(o){ return o.category==='CALL' && validOpt(o); });
   var puts  = options.filter(function(o){ return o.category==='PUT'  && validOpt(o); });
   if (!calls.length || !puts.length) {
@@ -1074,17 +1107,17 @@ function renderEntradaSugerida(options, serie) {
     box.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--muted)">Sem liquidez suficiente para sugerir entrada.</div>';
     return;
   }
- 
+
   function getDelta(o) { return Math.abs(o.delta || (o.greeks&&o.greeks.delta) || 0); }
   function getMid(o)   { return ((o.bid||0) + (o.ask||0)) / 2; }
   function getDistPct(strike) { return Math.abs(strike - spot) / spot * 100; }
- 
+
   function findNear(list, targetDelta) {
     return list.slice().sort(function(a,b){
       return Math.abs(getDelta(a) - targetDelta) - Math.abs(getDelta(b) - targetDelta);
     })[0] || null;
   }
- 
+
   // ─── ALTERNATIVAS STRADDLE ───────────────────────────────────────────────
   // 3 strikes únicos mais próximos do spot
   var usedStrikes = {};
@@ -1115,7 +1148,7 @@ function renderEntradaSugerida(options, serie) {
       }
       stradAlts.push({ call:c, put:p, credito:credito, label:label, tag:tag, tagColor:tagColor, pros:pros, cons:cons });
     });
- 
+
   // ─── ALTERNATIVAS STRANGLE ────────────────────────────────────────────────
   var strangTargets = [
     { delta:0.15, name:'Conservador', tag:'Δ ~15', color:'var(--green)',
@@ -1128,10 +1161,10 @@ function renderEntradaSugerida(options, serie) {
       pros:'Crédito mais alto; pernas mais próximas do spot',
       cons:'Zona de lucro mais estreita; gamma maior; mais gestão' }
   ];
- 
+
   var strangCalls = calls.filter(function(o){ return o.strike > spot; });
   var strangPuts  = puts.filter(function(o){  return o.strike < spot; });
- 
+
   var strangAlts = strangTargets.map(function(t) {
     var c = findNear(strangCalls.length ? strangCalls : calls, t.delta);
     var p = findNear(strangPuts.length  ? strangPuts  : puts,  t.delta);
@@ -1142,9 +1175,9 @@ function renderEntradaSugerida(options, serie) {
     var distP = getDistPct(p.strike);
     return Object.assign({}, t, { call:c, put:p, credito:credito, pop:pop, distC:distC, distP:distP });
   }).filter(Boolean);
- 
+
   // ─── RENDER ────────────────────────────────────────────────────────────────
- 
+
   function altCard(alt, isStrad) {
     var c = alt.call, p = alt.put;
     var dc = getDelta(c), dp = getDelta(p);
@@ -1187,18 +1220,18 @@ function renderEntradaSugerida(options, serie) {
       + '</div>'
       + '</div>';
   }
- 
+
   var zone = getVxbrZone(radarData.vxbr || (radarData.ivCur||0)*100 || 0);
   var dteColor = dte >= 21 && dte <= 45 ? 'var(--green)' : 'var(--yellow)';
   var dteNote  = dte >= 21 && dte <= 45 ? 'ideal' : 'ok';
- 
+
   box.style.display = 'block';
   box.innerHTML =
     '<div style="font-family:var(--mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">'
     + '★ Entrada Sugerida · ' + fmtDate(serie.due_date)
     + ' · <span style="color:' + dteColor + '">' + dte + 'du (' + dteNote + ')</span>'
     + '</div>'
- 
+
     // Straddle
     + '<div style="margin-bottom:14px">'
     + '<div style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--yellow);margin-bottom:8px;display:flex;align-items:center;gap:8px">'
@@ -1206,7 +1239,7 @@ function renderEntradaSugerida(options, serie) {
     + '<div style="display:grid;grid-template-columns:repeat(' + stradAlts.length + ',1fr);gap:8px">'
     + stradAlts.map(function(a){ return altCard(a, true); }).join('')
     + '</div></div>'
- 
+
     // Strangle
     + '<div style="margin-bottom:12px">'
     + '<div style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent);margin-bottom:8px;display:flex;align-items:center;gap:8px">'
@@ -1214,16 +1247,16 @@ function renderEntradaSugerida(options, serie) {
     + '<div style="display:grid;grid-template-columns:repeat(' + strangAlts.length + ',1fr);gap:8px">'
     + strangAlts.map(function(a){ return altCard(a, false); }).join('')
     + '</div></div>'
- 
+
     + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted)">'
     + 'Zona: <span style="color:' + zone.color + ';font-weight:600">' + zone.label + '</span>'
     + ' · Mão: <span style="color:' + zone.color + '">' + zone.sizeLabel + '</span>'
     + ' · ★ = recomendado · POP = probabilidade estimada de lucro no vencimento'
     + '</div>';
 }
- 
+
 function renderChain(options) { renderChainOplab(options, null); }
- 
+
 async function loadStrategies() {
   try {
     var r = await fetch('https://spa.oplab.com.br/v2/positions', {
@@ -1244,7 +1277,7 @@ async function loadStrategies() {
     renderPnl([]);
   }
 }
- 
+
 function renderChain(options) {
   var spot = spotData.close || 0;
   var data;
@@ -1283,11 +1316,11 @@ function renderChain(options) {
     + '<th>Bid</th><th>Ask</th><th>Delta</th><th>Theta</th><th>IV</th><th>Vol</th><th>MM</th>'
     + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
- 
+
 function renderRange(options, serie) {
   var spot = spotData.close || 0;
   if (!spot) { document.getElementById('range-box').innerHTML = '<div class="empty">Aguardando spot.</div>'; return; }
- 
+
   // Normaliza a IV para % independente da escala que a API retornar
   // Aceita: 0.1737 (decimal), 17.37 (já em %), 1737 (escala 100x)
   function normIv(raw) {
@@ -1297,10 +1330,10 @@ function renderRange(options, serie) {
     if (raw < 200) return raw;
     return raw / 100;
   }
- 
+
   // Cascata: tenta várias fontes, usa a primeira que retornar IV válida (> 0)
   var ivPct = 0;
- 
+
   // Fonte 1: IV da opção ATM da cadeia (prefere call, ignora IV degenerada < 5%)
   if (options && options.length) {
     var atmStrike = options.reduce(function(b,o){ return (!b || Math.abs(o.strike-spot) < Math.abs(b.strike-spot)) ? o : b; }, null);
@@ -1330,16 +1363,16 @@ function renderRange(options, serie) {
   }
   // Último recurso
   if (ivPct <= 0) ivPct = 20;
- 
+
   var iv = ivPct / 100; // decimal para a fórmula
- 
+
   var dte = serie ? serie.days_to_maturity : 0;
   // Fórmula: spot × IV × √(DTE/252)
   var move = spot * iv * Math.sqrt(dte / 252);
   var lo = spot - move, hi = spot + move;
   var movePct = (move / spot * 100).toFixed(2);
   var spotPct = (hi > lo) ? ((spot - lo) / (hi - lo) * 100).toFixed(1) : 50;
- 
+
   document.getElementById('range-box').innerHTML =
     '<div style="display:flex;justify-content:space-between;margin-bottom:10px">'
     + '<div><div style="font-family:var(--mono);font-size:10px;color:var(--muted)">IV Spot</div>'
@@ -1356,12 +1389,12 @@ function renderRange(options, serie) {
     + '<span style="color:var(--green)">R$ ' + hi.toFixed(2) + '</span>'
     + '</div>';
 }
- 
+
 // ─── PAYOFF INTERATIVO ────────────────────────────────────────────────────────
- 
+
 var payoffTabs = [];
 var activePayoffIdx = 0;
- 
+
 function calcPayoffAtPrice(legs, s) {
   var pnl = 0;
   legs.forEach(function(leg) {
@@ -1378,7 +1411,7 @@ function calcPayoffAtPrice(legs, s) {
   });
   return pnl;
 }
- 
+
 function calcPayoffNow(legs) {
   var pnl = 0;
   legs.forEach(function(leg) {
@@ -1402,7 +1435,7 @@ function calcPayoffNow(legs) {
   });
   return pnl;
 }
- 
+
 function calcPayoffTodayAtPrice(legs, s) {
   var pnl = 0;
   var spot = spotData.close || s;
@@ -1425,20 +1458,20 @@ function calcPayoffTodayAtPrice(legs, s) {
   });
   return pnl;
 }
- 
+
 function calcPayoff(legs, prices) {
   return prices.map(function(s) { return calcPayoffAtPrice(legs, s); });
 }
- 
+
 function calcMetrics(pos) {
   var legs    = (pos && pos.details && pos.details.legs) || [];
   var outLegs = (pos && pos.details && pos.details.out)  || [];
- 
+
   // Crédito total = tudo que foi recebido nas vendas originais (incluindo parcelas já fechadas)
   // leg.initial já representa o crédito original de TODOS os contratos vendidos dessa perna
   var creditoTotal = 0;
   legs.forEach(function(leg) { creditoTotal += leg.initial || 0; });
- 
+
   // Desmontado = o que já foi pago para fechar partes da posição (ordens de saída)
   var desmontado = 0;
   outLegs.forEach(function(leg) {
@@ -1448,7 +1481,7 @@ function calcMetrics(pos) {
     if (action === 'BUY') desmontado -= qty * price;
     else                  desmontado += qty * price;
   });
- 
+
   // Projetado para hoje = custo para fechar a posição RESTANTE AGORA
   // Usa ask (preço que pagaríamos para recomprar o que foi vendido)
   // Fallback para close quando ask = 0 (sem cotação)
@@ -1464,10 +1497,10 @@ function calcMetrics(pos) {
     if (action === 'SELL') projetadoHoje -= qty * refPrice;
     else                   projetadoHoje += qty * refPrice;
   });
- 
+
   // Lucro projetado hoje = crédito total + desmontado + custo para fechar hoje
   var resultadoProjetado = creditoTotal + desmontado + projetadoHoje;
- 
+
   // Lucro MÁXIMO = crédito das legs RESTANTES abertas se expirarem OTM no vencimento
   // = price-in × quantidade atual (não inclui parcelas já fechadas)
   var lucroMax = 0;
@@ -1480,7 +1513,7 @@ function calcMetrics(pos) {
   });
   // Soma o que já foi realizado nas parcelas fechadas
   lucroMax += desmontado + (outLegs.length > 0 ? calcRealizedFromOut(outLegs, pos) : 0);
- 
+
   // Risco máximo
   var dte     = pos ? (pos['days-to-maturity'] || 0) : 0;
   var dueDate = pos ? (pos['due-date'] || '') : '';
@@ -1497,7 +1530,7 @@ function calcMetrics(pos) {
     });
     risco = maxRisco > 0 ? 'R$ ' + (maxRisco - creditoTotal).toFixed(2) : '???';
   }
- 
+
   return {
     creditoTotal:        creditoTotal,
     desmontado:          desmontado,
@@ -1509,7 +1542,7 @@ function calcMetrics(pos) {
     dueDate:             dueDate
   };
 }
- 
+
 function calcRealizedFromOut(outLegs, pos) {
   // P&L realizado nas parcelas já fechadas
   // (crédito original - custo de recompra) para cada ordem de saída
@@ -1531,7 +1564,7 @@ function calcRealizedFromOut(outLegs, pos) {
   });
   return 0; // já incluído no desmontado + creditoTotal
 }
- 
+
 function renderMetrics(m) {
   var rp = m.resultadoProjetado;
   var rpColor = rp >= 0 ? 'var(--green)' : 'var(--red)';
@@ -1553,7 +1586,7 @@ function renderMetrics(m) {
     + row('Risco maximo estimado', 'Na data do vencimento', m.risco, 'var(--red)')
     + row('Dias restantes', m.dueDate ? 'Prox. venc. ' + fmtDate(m.dueDate) : '', m.dte + ' du', 'var(--accent)');
 }
- 
+
 function buildPayoffTabs(positions) {
   var allLegs = [];
   positions.forEach(function(pos) {
@@ -1574,7 +1607,7 @@ function buildPayoffTabs(positions) {
   drawMainPayoff(0);
   setupPayoffHover();
 }
- 
+
 function refreshMetrics(idx) {
   var metricsEl = document.getElementById('payoff-metrics');
   if (!metricsEl) return;
@@ -1615,7 +1648,7 @@ function refreshMetrics(idx) {
   // Redesenha após DOM atualizar a altura das métricas
   setTimeout(function() { drawMainPayoff(activePayoffIdx); }, 30);
 }
- 
+
 function selectPayoffTab(idx, el) {
   activePayoffIdx = idx;
   document.querySelectorAll('#payoff-tabs .tab').forEach(function(t){ t.classList.remove('active'); });
@@ -1625,7 +1658,7 @@ function selectPayoffTab(idx, el) {
   drawMainPayoff(idx);
   document.getElementById('payoff-details').style.display = 'none';
 }
- 
+
 function drawMainPayoff(idx) {
   var canvas = document.getElementById('payoff-main');
   if (!canvas || !payoffTabs[idx]) return;
@@ -1633,11 +1666,11 @@ function drawMainPayoff(idx) {
   var spot = spotData.close || 168;
   var ctx = canvas.getContext('2d');
   var W = canvas.offsetWidth || 600;
- 
+
   // Altura = coluna de métricas para preencher o espaço
   var metricsEl = document.getElementById('payoff-metrics');
   var H = metricsEl ? Math.max(metricsEl.offsetHeight, 240) : 280;
- 
+
   canvas.width = W;
   canvas.height = H;
   var lo = spot*0.80, hi = spot*1.20, n=240;
@@ -1721,7 +1754,7 @@ function drawMainPayoff(idx) {
   ctx.fillText((pExp>=0?'+':'')+'R$'+pExp.toFixed(0),xSpot+4,padT+14);
   canvas._payoffData={prices:prices,pnlsExp:pnlsExp,pnlsNow:pnlsNow,pnlNowAtSpot:pnlNowAtSpot,legs:legs,lo:lo,hi:hi,padL:padL,padR:padR,toX:toX,toY:toY,spot:spot,W:W};
 }
- 
+
 function setupPayoffHover() {
   var canvas=document.getElementById('payoff-main');
   var tooltip=document.getElementById('payoff-tooltip');
@@ -1744,11 +1777,11 @@ function setupPayoffHover() {
   };
   canvas.onmouseleave=function(){tooltip.style.display='none';};
 }
- 
+
 function renderPayoffs(positions) {
   setTimeout(function() { buildPayoffTabs(positions); }, 100);
 }
- 
+
 function renderStrategyPayoff(canvasId, legs, spot) {
   setTimeout(function() {
     var canvas=document.getElementById(canvasId); if(!canvas) return;
@@ -1784,8 +1817,8 @@ function renderStrategyPayoff(canvasId, legs, spot) {
     ctx.fillText((pExp>=0?'+':'')+'R$'+pExp.toFixed(0),xSpot+3,pad+10);
   }, 150);
 }
- 
- 
+
+
 function renderStrategies(positions) {
   if (!positions.length) {
     document.getElementById('pos-box').innerHTML = '<div class="empty">Nenhuma posição encontrada.</div>';
@@ -1861,7 +1894,7 @@ function renderStrategies(positions) {
     + renderGreeksRow(gTot, false)
     + '</div>';
   document.getElementById('pos-box').innerHTML = html;
- 
+
   // Desenha payoffs por estratégia
   var spot = spotData.close || 168;
   positions.forEach(function(pos, idx) {
@@ -1871,7 +1904,7 @@ function renderStrategies(positions) {
   // Payoff consolidado
   renderPayoffs(positions);
 }
- 
+
 function renderPnl(positions) {
   var pnlAberto = 0, pnlRealizado = 0, nLegs = 0, nAbertas = 0;
   var allLegs = [];
@@ -1895,7 +1928,7 @@ function renderPnl(positions) {
   var g = calcPositionGreeks(allLegs);
   var dColor = Math.abs(g.delta) < 50 ? 'var(--green)' : Math.abs(g.delta) < 150 ? 'var(--yellow)' : 'var(--red)';
   var tColor = g.theta >= 0 ? 'var(--green)' : 'var(--red)';
- 
+
   document.getElementById('pnl-box').innerHTML =
     '<div class="grow"><span class="gname">P&L Aberto</span><span class="gval ' + pc + '">' + (pnl>=0?'+':'') + 'R$ ' + pnl.toFixed(2) + '</span></div>'
     + (Math.abs(pnlRealizado) > 0.01
@@ -1918,7 +1951,7 @@ function renderPnl(positions) {
       : '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:6px">Gregas: atualizar dados</div>'
     );
 }
- 
+
 function buildSnap() {
   var spot = spotData.close || 0;
   var vp   = spotData.variation || 0;
@@ -1977,17 +2010,19 @@ function buildSnap() {
   } else {
     s += 'POSIÇÕES: Nenhuma encontrada.\n';
   }
- 
+
   // Radar de Oportunidades no snapshot
   if (spot && seriesInfo.series) {
     var mensaisSnap = seriesInfo.series
-      .filter(function(x){ return isMonthlyExpiry(x.due_date) && x.days_to_maturity >= 21; })
+      .filter(function(x){ return isMonthlyExpiry(x.due_date) && x.days_to_maturity >= 10; })
       .slice(0, 3);
     if (mensaisSnap.length) {
-      s += '\nRADAR DE OPORTUNIDADES (straddles e strangles):\n';
       function gd(o){ return o.bs ? (o.bs.delta||0) : 0; }
       function gmid(o){ var b=o.bid||0,a=o.ask||0; return (b>0&&a>0)?(b+a)/2:(o.close||0); }
       function vopt(o){ return o&&o.symbol&&(o.bid>0)&&o.bs&&Math.abs(o.bs.delta||0)>=0.05&&Math.abs(o.bs.delta||0)<=0.95; }
+      function fbd(list,t){ if(!list.length)return null; return list.slice().sort(function(a,b){return Math.abs(Math.abs(gd(a))-t)-Math.abs(Math.abs(gd(b))-t);})[0]; }
+
+      s += '\nRADAR DE OPORTUNIDADES — VOLATILIDADE:\n';
       mensaisSnap.forEach(function(serie) {
         var calls=[],puts=[];
         (serie.strikes||[]).forEach(function(sk){
@@ -1995,29 +2030,56 @@ function buildSnap() {
           if(vopt(sk.put)&&sk.strike>=spot*0.8&&sk.strike<=spot*1.2) puts.push(Object.assign({},sk.put,{strike:sk.strike}));
         });
         if(!calls.length||!puts.length) return;
-        function fbd(list,t){ return list.slice().sort(function(a,b){return Math.abs(Math.abs(gd(a))-t)-Math.abs(Math.abs(gd(b))-t);})[0]; }
+        var cO=calls.filter(function(o){return o.strike>spot;}), pO=puts.filter(function(o){return o.strike<spot;});
         var sC=fbd(calls,0.50), sP=fbd(puts,0.50);
         if(sC&&sP){
           var cr=gmid(sC)+gmid(sP);
           s += '  STRADDLE ' + fmtDate(serie.due_date) + ' (' + serie.days_to_maturity + 'du): '
             + 'C ' + sC.symbol + ' K' + sC.strike.toFixed(0) + ' / P ' + sP.symbol + ' K' + sP.strike.toFixed(0)
-            + ' | Crédito R$' + cr.toFixed(2) + ' | BE R$' + (sC.strike-cr).toFixed(2) + '-R$' + (sC.strike+cr).toFixed(2) + '\n';
+            + ' | Créd R$' + cr.toFixed(2) + ' | BE R$' + (sC.strike-cr).toFixed(2) + '-R$' + (sC.strike+cr).toFixed(2) + '\n';
         }
+        [0.15,0.22,0.30].forEach(function(d){
+          var gC=fbd(cO.length?cO:calls,d), gP=fbd(pO.length?pO:puts,d);
+          if(gC&&gP&&gC.strike!==gP.strike){
+            var cr2=gmid(gC)+gmid(gP);
+            s += '  STRANGLE Δ' + (d*100).toFixed(0) + ' ' + fmtDate(serie.due_date) + ' (' + serie.days_to_maturity + 'du): '
+              + 'C ' + gC.symbol + ' K' + gC.strike.toFixed(0) + ' Δ' + gd(gC).toFixed(2) + ' / P ' + gP.symbol + ' K' + gP.strike.toFixed(0) + ' Δ' + gd(gP).toFixed(2)
+              + ' | Créd R$' + cr2.toFixed(2) + ' | BE R$' + (gP.strike-cr2).toFixed(2) + '-R$' + (gC.strike+cr2).toFixed(2) + '\n';
+          }
+        });
+      });
+
+      s += '\nRADAR DE OPORTUNIDADES — DIRECIONAIS:\n';
+      mensaisSnap.forEach(function(serie) {
+        var calls=[],puts=[];
+        (serie.strikes||[]).forEach(function(sk){
+          if(vopt(sk.call)&&sk.strike>=spot*0.8&&sk.strike<=spot*1.2) calls.push(Object.assign({},sk.call,{strike:sk.strike}));
+          if(vopt(sk.put)&&sk.strike>=spot*0.8&&sk.strike<=spot*1.2) puts.push(Object.assign({},sk.put,{strike:sk.strike}));
+        });
+        if(!calls.length||!puts.length) return;
         var cO=calls.filter(function(o){return o.strike>spot;}), pO=puts.filter(function(o){return o.strike<spot;});
-        var gC=fbd(cO.length?cO:calls,0.22), gP=fbd(pO.length?pO:puts,0.22);
-        if(gC&&gP&&gC.strike!==gP.strike){
-          var cr2=gmid(gC)+gmid(gP);
-          s += '  STRANGLE ' + fmtDate(serie.due_date) + ' (' + serie.days_to_maturity + 'du): '
-            + 'C ' + gC.symbol + ' K' + gC.strike.toFixed(0) + ' Δ' + gd(gC).toFixed(2) + ' / P ' + gP.symbol + ' K' + gP.strike.toFixed(0) + ' Δ' + gd(gP).toFixed(2)
-            + ' | Crédito R$' + cr2.toFixed(2) + ' | BE R$' + (gP.strike-cr2).toFixed(2) + '-R$' + (gC.strike+cr2).toFixed(2) + '\n';
-        }
+        var dte=serie.days_to_maturity;
+        [0.15,0.20,0.30].forEach(function(d){
+          var p=fbd(pO.length?pO:puts,d);
+          if(p){ var crP=gmid(p); var risco=p.strike-crP; var retP=risco>0?(crP/risco)*(252/dte)*100:0;
+            s += '  VENDA PUT (alta) Δ' + (d*100).toFixed(0) + ' ' + fmtDate(serie.due_date) + ' (' + dte + 'du): '
+              + p.symbol + ' K' + p.strike.toFixed(0) + ' Δ' + gd(p).toFixed(2) + ' | Créd R$' + crP.toFixed(2)
+              + ' | POP ' + ((1-Math.abs(gd(p)))*100).toFixed(0) + '% | Ret.aa ' + retP.toFixed(1) + '% | BE R$' + (p.strike-crP).toFixed(2) + '\n';
+          }
+          var c=fbd(cO.length?cO:calls,d);
+          if(c){ var crC=gmid(c); var retC=(crC/(c.strike-crC))*(252/dte)*100;
+            s += '  VENDA CALL (baixa) Δ' + (d*100).toFixed(0) + ' ' + fmtDate(serie.due_date) + ' (' + dte + 'du): '
+              + c.symbol + ' K' + c.strike.toFixed(0) + ' Δ' + gd(c).toFixed(2) + ' | Créd R$' + crC.toFixed(2)
+              + ' | POP ' + ((1-Math.abs(gd(c)))*100).toFixed(0) + '% | Ret.aa ' + retC.toFixed(1) + '% | BE R$' + (c.strike+crC).toFixed(2) + '\n';
+          }
+        });
       });
     }
   }
- 
+
   document.getElementById('snapout').textContent = s;
 }
- 
+
 function copySnap() {
   var txt = document.getElementById('snapout').textContent;
   navigator.clipboard.writeText(txt).then(function() {
@@ -2026,14 +2088,14 @@ function copySnap() {
     setTimeout(function(){ b.innerHTML = '📋 Copiar Snapshot'; }, 2000);
   });
 }
- 
+
 function switchTab(tab, el) {
   activeTab = tab;
   document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
   el.classList.add('active');
   renderChain(curOptions);
 }
- 
+
 function toggleAuto() {
   if (document.getElementById('auto').checked) {
     autoTimer = setInterval(refreshAll, 30000);
@@ -2041,9 +2103,9 @@ function toggleAuto() {
     clearInterval(autoTimer); autoTimer = null;
   }
 }
- 
+
 // ─── RADAR DE DECISÃO ────────────────────────────────────────────────────────
- 
+
 async function loadRadar() {
   // Tenta buscar VXBR
   try {
@@ -2058,14 +2120,14 @@ async function loadRadar() {
   }
   renderRadar(radarActiveTab);
 }
- 
+
 function switchRadarTab(tab, el) {
   radarActiveTab = tab;
   document.querySelectorAll('#radar-tabs .tab').forEach(function(t){ t.classList.remove('active'); });
   el.classList.add('active');
   renderRadar(tab);
 }
- 
+
 function renderRadar(tab) {
   var box = document.getElementById('radar-box');
   if (!box) return;
@@ -2073,14 +2135,14 @@ function renderRadar(tab) {
   else if (tab === 'conduzir') box.innerHTML = renderRadarConduzir();
   else                     box.innerHTML = renderRadarEncerrar();
 }
- 
+
 function getVxbrZone(v) {
   if (v < 15.13) return { label:'EVITAR Vega negativo', color:'#4a90d9', bg:'rgba(74,144,217,0.12)', size:0,   sizeLabel:'EVITAR' };
   if (v < 16.89) return { label:'Posicoes pequenas',     color:'#ffd600', bg:'rgba(255,214,0,0.10)',  size:20,  sizeLabel:'~20% do max' };
   if (v < 22.17) return { label:'Ate 2/3 da posicao max', color:'#00e676', bg:'rgba(0,230,118,0.10)', size:67, sizeLabel:'Ate 67% do max' };
   return           { label:'Autorizada agressividade',   color:'#ff3d57', bg:'rgba(255,61,87,0.12)',  size:100, sizeLabel:'100% — agressivo' };
 }
- 
+
 function findBreakevens(legs) {
   var spot = spotData.close || 168;
   var lo = spot * 0.65, hi = spot * 1.35, n = 400;
@@ -2093,13 +2155,13 @@ function findBreakevens(legs) {
   }
   return bes;
 }
- 
+
 function getRolloverStage(legs, pctCapturado, dte) {
   var spot = spotData.close || 168;
   var bes = findBreakevens(legs);
   var nearestDist = 100;
   bes.forEach(function(be){ var d = Math.abs(be-spot)/spot*100; if(d<nearestDist) nearestDist=d; });
- 
+
   if (dte <= 5 && nearestDist < 2)
     return { stage:3, label:'Rolar 3 / Encerrar', desc:'Strangle reverso (deltas > 50) ou fechar agora', color:'var(--red)', urgency:'URGENTE' };
   if (dte <= 7 && pctCapturado < 30 && nearestDist < 4)
@@ -2112,7 +2174,7 @@ function getRolloverStage(legs, pctCapturado, dte) {
     return { stage:1, label:'Rolar 1', desc:'Rolar cedo — credito de uma perna paga a outra (0x0)', color:'var(--accent)', urgency:'MONITORAR' };
   return { stage:-1, label:'Aguardar', desc:'Posicao dentro do esperado', color:'var(--muted)', urgency:'' };
 }
- 
+
 function renderRadarEntrar() {
   var vxbr    = radarData.vxbr    || 0;
   var ivRank  = radarData.ivRank  || 0;
@@ -2121,7 +2183,7 @@ function renderRadarEntrar() {
   var ivHv    = hvCur > 0 ? (ivCur / hvCur) : 0;
   var zone    = getVxbrZone(vxbr);
   var vxbrBar = Math.min(100, (vxbr / 30) * 100);
- 
+
   // Estratégia sugerida
   var stratLabel, stratDesc, stratColor;
   if (zone.size === 0) {
@@ -2135,14 +2197,14 @@ function renderRadarEntrar() {
   } else {
     stratLabel = 'Evitar vender vol'; stratDesc = 'IV Rank muito baixo — premio insuficiente'; stratColor = 'var(--red)';
   }
- 
+
   // Qualidade do prêmio
   var premLabel, premColor;
   if (ivHv >= 1.3)      { premLabel = 'Excelente'; premColor = 'var(--green)'; }
   else if (ivHv >= 1.1) { premLabel = 'Bom';       premColor = 'var(--accent)'; }
   else if (ivHv >= 0.9) { premLabel = 'OK';         premColor = 'var(--yellow)'; }
   else                  { premLabel = 'Fraco';      premColor = 'var(--red)'; }
- 
+
   // DTE ideal
   var bestDTE = '—';
   if (seriesInfo.series) {
@@ -2153,9 +2215,9 @@ function renderRadarEntrar() {
       if (cl) bestDTE = cl.days_to_maturity + 'du · ' + fmtDate(cl.due_date) + ' (fora do ideal 21-45du)';
     }
   }
- 
+
   var vxbrLabel = vxbr > 0 ? vxbr.toFixed(2) : '...';
- 
+
   return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">'
     // Coluna esquerda: VXBR
     + '<div>'
@@ -2194,12 +2256,12 @@ function renderRadarEntrar() {
     + '</div>'
     + '</div>';
 }
- 
+
 function renderRadarConduzir() {
   if (!curPositions.length) return '<div class="empty">Nenhuma posicao aberta.</div>';
   var spot = spotData.close || 168;
   var html = '';
- 
+
   curPositions.forEach(function(pos) {
     var legs = (pos.details && pos.details.legs) || [];
     if (!legs.length) return;
@@ -2216,7 +2278,7 @@ function renderRadarConduzir() {
     var dteColor = dte <= 5 ? 'var(--red)' : dte <= 10 ? 'var(--yellow)' : 'var(--text)';
     var beColor  = nearestDist < 3 ? 'var(--red)' : nearestDist < 6 ? 'var(--yellow)' : 'var(--green)';
     var urgBg    = roll.urgency === 'URGENTE' ? 'var(--red)' : roll.urgency === 'ACAO' ? 'var(--green)' : roll.urgency === 'ATENCAO' ? 'var(--yellow)' : roll.urgency === 'MONITORAR' ? 'var(--accent)' : 'var(--muted)';
- 
+
     html += '<div style="background:var(--surface2);border-radius:8px;padding:14px;margin-bottom:12px;border-left:3px solid ' + roll.color + '">'
       + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
       + '<div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent)">' + (pos.name||'Posicao') + '</div>'
@@ -2255,12 +2317,12 @@ function renderRadarConduzir() {
   });
   return html;
 }
- 
+
 function renderRadarEncerrar() {
   if (!curPositions.length) return '<div class="empty">Nenhuma posicao aberta.</div>';
   var spot = spotData.close || 168;
   var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
- 
+
   curPositions.forEach(function(pos) {
     var legs = (pos.details && pos.details.legs) || [];
     if (!legs.length) return;
@@ -2271,10 +2333,10 @@ function renderRadarEncerrar() {
     var bes = findBreakevens(legs);
     var nearestDist = 100;
     bes.forEach(function(be){ var d=Math.abs(be-spot)/spot*100; if(d<nearestDist) nearestDist=d; });
- 
+
     var mainColor, mainLabel, mainDesc;
     var signals = [];
- 
+
     if (dte <= 5 && nearestDist < 2) {
       mainColor = 'var(--red)'; mainLabel = 'FECHAR AGORA';
       mainDesc = 'DTE critico + proximo do breakeven — risco alto';
@@ -2306,7 +2368,7 @@ function renderRadarEncerrar() {
       signals.push({ c:pct>=0?'var(--accent)':'var(--red)', t:'Capturado: ' + pct.toFixed(0) + '%' });
       signals.push({ c:'var(--green)', t:'Dist. BE: ' + nearestDist.toFixed(1) + '%' });
     }
- 
+
     var pctCl = Math.min(100, Math.max(0, pct));
     html += '<div style="background:var(--surface2);border-radius:8px;padding:14px;border-left:3px solid ' + mainColor + '">'
       + '<div style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent);margin-bottom:8px">' + (pos.name||'Posicao') + '</div>'
@@ -2324,9 +2386,9 @@ function renderRadarEncerrar() {
   html += '</div>';
   return html;
 }
- 
+
 // ─── CHAT CLAUDE ─────────────────────────────────────────────────────────────
- 
+
 function buildChatContext() {
   var spot = spotData.close || 0;
   var vxbr = radarData.vxbr || 0;
@@ -2334,13 +2396,13 @@ function buildChatContext() {
   var ivCur  = (radarData.ivCur || 0) * 100;
   var hvCur  = (radarData.hvCur || 0) * 100;
   var expiry = document.getElementById('esel') ? document.getElementById('esel').value : '';
- 
+
   var ctx = '=== SNAPSHOT ' + new Date().toLocaleString('pt-BR') + ' ===\n\n';
   ctx += 'BOVA11: R$' + spot.toFixed(2) + ' (' + (spotData.variation||0).toFixed(2) + '%) | Max:R$' + (spotData.high||0).toFixed(2) + ' Min:R$' + (spotData.low||0).toFixed(2) + '\n';
   ctx += 'VXBR: ' + (vxbr > 0 ? vxbr.toFixed(2) : 'N/D');
   ctx += ' | IV BOVA11: ' + ivCur.toFixed(2) + '% | HV (EWMA): ' + hvCur.toFixed(2) + '% | IV Rank: ' + ivRank.toFixed(1) + '\n';
   ctx += 'Zona: ' + getVxbrZone(vxbr || ivCur / 100).label + ' | Mao: ' + getVxbrZone(vxbr || ivCur / 100).sizeLabel + '\n\n';
- 
+
   if (curPositions.length) {
     ctx += 'POSICOES ABERTAS:\n';
     curPositions.forEach(function(pos) {
@@ -2367,7 +2429,7 @@ function buildChatContext() {
   } else {
     ctx += 'POSICOES: Nenhuma posicao aberta.\n';
   }
- 
+
   if (curOptions.length) {
     var atm = curOptions.filter(function(o){ return spot && Math.abs(o.strike-spot)/spot < 0.05; }).sort(function(a,b){ return a.strike-b.strike; });
     if (atm.length) {
@@ -2382,24 +2444,24 @@ function buildChatContext() {
   }
   return ctx;
 }
- 
+
 async function sendChat() {
   var apiKey = (document.getElementById('claude-api-key').value || '').trim();
   var input  = document.getElementById('chat-input');
   var btn    = document.getElementById('chat-send-btn');
   var question = (input.value || '').trim();
- 
+
   if (!apiKey) { addChatMessage('sistema', 'Cole sua Anthropic API Key acima para usar o chat. Obtenha em console.anthropic.com'); return; }
   if (!question) return;
- 
+
   input.value = '';
   btn.disabled = true;
   addChatMessage('user', question);
   addChatMessage('loading', '');
- 
+
   var ctx = buildChatContext();
   var systemPrompt = 'Voce e um assistente especializado em operacoes de volatilidade com opcoes de BOVA11 (iShares Ibovespa ETF). O trader opera exclusivamente venda de volatilidade: straddles e strangles vendidos, e posicoes direcionais (put ou call vendidas a seco). Metodo (Fabio Figueiredo): Position sizing = Capital / Strike = max puts, fatiado em 3 entradas delta 20/25. Rolagem 1: rolar cedo 0x0, credito de uma perna paga a outra. Rolagem 2: straddle ambas delta 50, manejo credito/0x0 (favorita). Rolagem 3: strangle reverso deltas >50, aceitar nao ganhar, reduzir risco. Stop: nova rolagem mesmo vencimento = estopa. Manter: rolar pro proximo venc 0x0 ou recebendo + IV alta. Zonas VXBR: <15.13 evitar, 15.13-16.89 pequeno, 16.89-22.17 ate 2/3, >22.17 agressivo. Responda direto em portugues brasileiro com numeros reais do snapshot.';
- 
+
   try {
     var res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -2431,7 +2493,7 @@ async function sendChat() {
   }
   btn.disabled = false;
 }
- 
+
 function addChatMessage(role, text) {
   var container = document.getElementById('chat-messages');
   if (!container) return;
@@ -2447,12 +2509,12 @@ function addChatMessage(role, text) {
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
 }
- 
+
 function removeChatLoading() {
   var el = document.getElementById('chat-loading');
   if (el) el.remove();
 }
- 
+
 function chatMarkdown(text) {
   return text
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
@@ -2464,14 +2526,14 @@ function chatMarkdown(text) {
     .replace(/^- (.*$)/gm,'<div style="display:flex;gap:6px;margin:2px 0"><span style="color:var(--accent)">·</span><span>$1</span></div>')
     .replace(/\n/g,'<br>');
 }
- 
+
 function fmtVol(v) {
   if (v>=1e9) return (v/1e9).toFixed(1)+'B';
   if (v>=1e6) return (v/1e6).toFixed(1)+'M';
   if (v>=1e3) return (v/1e3).toFixed(1)+'K';
   return String(v);
 }
- 
+
 function fmtDate(d) {
   if (!d || d==='—') return '—';
   try {
