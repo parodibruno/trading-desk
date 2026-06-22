@@ -307,7 +307,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
 <script>
 var API = 'https://api.oplab.com.br/v3';
-var APP_VERSION = 'v1.2 · 19/jun/2026';
+var APP_VERSION = 'v1.3 · 19/jun/2026';
 var tok = '';
 var spotData = {};
 var radarData = {};
@@ -882,10 +882,8 @@ var viesData = null;
 
 async function loadVies() {
   try {
-    // Busca ~120 candles diários para ter base para MM50, MACD, RSI
-    var to = Math.floor(Date.now() / 1000);
-    var from = to - (200 * 24 * 60 * 60); // 200 dias corridos
-    var r = await fetch(API + '/market/historical/BOVA11/1d?from=' + from + '&to=' + to + '&amount=200', {
+    // Usa só 'amount' — passar from/to em segundos causa 403 nesta API
+    var r = await fetch(API + '/market/historical/BOVA11/1d?amount=200', {
       headers: { 'Access-Token': tok }
     });
     if (!r.ok) { viesData = null; renderVies(); return; }
