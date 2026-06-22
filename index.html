@@ -307,7 +307,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
 <script>
 var API = 'https://api.oplab.com.br/v3';
-var APP_VERSION = 'v1.3 · 19/jun/2026';
+var APP_VERSION = 'v1.4 · 19/jun/2026';
 var tok = '';
 var spotData = {};
 var radarData = {};
@@ -845,9 +845,10 @@ function renderChainOplab(options, serie) {
   }).join('');
 
   document.getElementById('chain-box').innerHTML =
-    '<div class="table-wrap">'
+    '<div class="table-wrap" style="max-height:440px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">'
     + '<table class="otable" style="min-width:500px">'
-    + '<thead><tr>'
+    + '<thead style="position:sticky;top:0;z-index:2;background:var(--surface)">'
+    + '<tr>'
     + '<th style="width:8px;padding:0"></th>'
     + '<th style="text-align:left;color:var(--green)">Ticker</th>'
     + '<th style="color:var(--green)">Bid</th>'
@@ -1862,7 +1863,34 @@ function refreshMetrics(idx) {
   }
   // Adiciona gregas abaixo das métricas
   var g = calcPositionGreeks(gLegs);
+
+  // Lista de pernas com preço de montagem (entrada)
+  var legsHtml = '';
+  if (gLegs.length) {
+    legsHtml = '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">'
+      + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Pernas · preço de montagem</div>';
+    gLegs.forEach(function(leg) {
+      var sym    = leg.symbol || '—';
+      var type   = leg['instrument-type'] || '';
+      var strike = leg.strike || 0;
+      var qty    = leg.amount || 0;
+      var action = leg.type || 'SELL';
+      var pxIn   = leg['price-in'] || 0;
+      var pxCur  = leg.close || 0;
+      var actCor = action === 'SELL' ? 'var(--red)' : 'var(--green)';
+      var actTxt = action === 'SELL' ? 'V' : 'C';
+      var tipoCor = type === 'PUT' ? 'var(--red)' : 'var(--green)';
+      legsHtml += '<div style="display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:10px;padding:3px 0">'
+        + '<span><span style="color:' + actCor + ';font-weight:700">' + actTxt + qty + '</span> '
+        + sym + ' <span style="color:' + tipoCor + '">' + type + '</span> K' + strike.toFixed(0) + '</span>'
+        + '<span style="color:var(--muted)">entrada <span style="color:var(--text);font-weight:700">R$' + pxIn.toFixed(2) + '</span> · atual R$' + pxCur.toFixed(2) + '</span>'
+        + '</div>';
+    });
+    legsHtml += '</div>';
+  }
+
   metricsEl.innerHTML = mHtml
+    + legsHtml
     + '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">'
     + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Gregas</div>'
     + renderGreeksRow(g, false)
