@@ -267,6 +267,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div id="radar-box"><div class="loading"><div class="spinner"></div>Carregando radar...</div></div>
   </div>
 
+  <div class="card" id="vies-card">
+    <div class="ctitle">
+      Viés Direcional · BOVA11
+      <span style="color:var(--muted);font-size:9px;font-weight:400;margin-left:8px">tendência · momentum · confirmação · exaustão</span>
+    </div>
+    <div id="vies-box"><div class="loading"><div class="spinner"></div>Calculando indicadores...</div></div>
+  </div>
+
   <div class="card" id="oportunidades-card">
     <div class="ctitle">
       Radar de Oportunidades
@@ -299,7 +307,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
 <script>
 var API = 'https://api.oplab.com.br/v3';
-var APP_VERSION = 'v1.1 · 19/jun/2026';
+var APP_VERSION = 'v1.2 · 19/jun/2026';
 var tok = '';
 var spotData = {};
 var radarData = {};
@@ -384,6 +392,7 @@ async function refreshAll() {
   try {
     await Promise.all([loadStatus(), loadSpot(), loadSeries(), loadStrategies(), loadVolatility()]);
     await loadRadar();
+    await loadVies();
     renderOportunidades();
     buildSnap();
   } catch(e) { console.error(e); }
@@ -865,6 +874,210 @@ function renderChainOplab(options, serie) {
     + '<span style="display:flex;align-items:center;gap:4px"><span style="color:var(--accent)">★</span> ATM (Straddle)</span>'
     + '</div>'
     + '</div>';
+}
+
+// ─── VIÉS DIRECIONAL ─────────────────────────────────────────────────────────
+
+var viesData = null;
+
+async function loadVies() {
+  try {
+    // Busca ~120 candles diários para ter base para MM50, MACD, RSI
+    var to = Math.floor(Date.now() / 1000);
+    var from = to - (200 * 24 * 60 * 60); // 200 dias corridos
+    var r = await fetch(API + '/market/historical/BOVA11/1d?from=' + from + '&to=' + to + '&amount=200', {
+      headers: { 'Access-Token': tok }
+    });
+    if (!r.ok) { viesData = null; renderVies(); return; }
+    var d = await r.json();
+    var candles = (d.data || []).filter(function(c){ return c.close > 0; });
+    viesData = candles;
+  } catch(e) {
+    viesData = null;
+  }
+  renderVies();
+}
+
+function sma(values, period) {
+  if (values.length < period) return null;
+  var slice = values.slice(-period);
+  return slice.reduce(function(a,b){ return a+b; }, 0) / period;
+}
+
+function ema(values, period) {
+  if (values.length < period) return null;
+  var k = 2 / (period + 1);
+  var emaVal = values.slice(0, period).reduce(function(a,b){return a+b;},0) / period;
+  for (var i = period; i < values.length; i++) {
+    emaVal = values[i] * k + emaVal * (1 - k);
+  }
+  return emaVal;
+}
+
+function emaSeries(values, period) {
+  if (values.length < period) return [];
+  var k = 2 / (period + 1);
+  var out = [];
+  var emaVal = values.slice(0, period).reduce(function(a,b){return a+b;},0) / period;
+  out.push(emaVal);
+  for (var i = period; i < values.length; i++) {
+    emaVal = values[i] * k + emaVal * (1 - k);
+    out.push(emaVal);
+  }
+  return out;
+}
+
+function calcRSI(closes, period) {
+  if (closes.length < period + 1) return null;
+  var gains = 0, losses = 0;
+  for (var i = closes.length - period; i < closes.length; i++) {
+    var diff = closes[i] - closes[i-1];
+    if (diff >= 0) gains += diff; else losses -= diff;
+  }
+  var avgGain = gains / period, avgLoss = losses / period;
+  if (avgLoss === 0) return 100;
+  var rs = avgGain / avgLoss;
+  return 100 - (100 / (1 + rs));
+}
+
+function calcMACD(closes) {
+  if (closes.length < 35) return null;
+  var ema12 = emaSeries(closes, 12);
+  var ema26 = emaSeries(closes, 26);
+  // Alinha as séries (ema12 é mais longa)
+  var offset = ema12.length - ema26.length;
+  var macdLine = [];
+  for (var i = 0; i < ema26.length; i++) {
+    macdLine.push(ema12[i + offset] - ema26[i]);
+  }
+  var signalLine = emaSeries(macdLine, 9);
+  var macd = macdLine[macdLine.length - 1];
+  var signal = signalLine[signalLine.length - 1];
+  return { macd: macd, signal: signal, hist: macd - signal };
+}
+
+function renderVies() {
+  var box = document.getElementById('vies-box');
+  if (!box) return;
+  if (!viesData || viesData.length < 50) {
+    box.innerHTML = '<div class="empty">Dados históricos insuficientes para calcular indicadores.</div>';
+    return;
+  }
+
+  var closes = viesData.map(function(c){ return c.close; });
+  var spot = spotData.close || closes[closes.length - 1];
+
+  // ── Indicador 1: Médias Móveis (tendência) — peso maior ──
+  var mm20 = sma(closes, 20);
+  var mm50 = sma(closes, 50);
+  var mmSignal = 0; // +1 alta, -1 baixa, 0 neutro
+  var mmTexto = '';
+  if (mm20 && mm50) {
+    if (spot > mm20 && mm20 > mm50)      { mmSignal = 1;  mmTexto = 'Preço acima das médias, MM20 > MM50 — tendência de alta'; }
+    else if (spot < mm20 && mm20 < mm50) { mmSignal = -1; mmTexto = 'Preço abaixo das médias, MM20 < MM50 — tendência de baixa'; }
+    else                                 { mmSignal = 0;  mmTexto = 'Médias entrelaçadas — sem tendência definida'; }
+  }
+
+  // ── Indicador 2: RSI (momentum) ──
+  var rsi = calcRSI(closes, 14);
+  var rsiSignal = 0;
+  var rsiTexto = '';
+  if (rsi != null) {
+    if (rsi > 70)      { rsiSignal = -1; rsiTexto = 'RSI ' + rsi.toFixed(0) + ' — sobrecomprado, cuidado com venda de PUT'; }
+    else if (rsi < 30) { rsiSignal = 1;  rsiTexto = 'RSI ' + rsi.toFixed(0) + ' — sobrevendido, cuidado com venda de CALL'; }
+    else if (rsi > 55) { rsiSignal = 1;  rsiTexto = 'RSI ' + rsi.toFixed(0) + ' — momentum comprador moderado'; }
+    else if (rsi < 45) { rsiSignal = -1; rsiTexto = 'RSI ' + rsi.toFixed(0) + ' — momentum vendedor moderado'; }
+    else               { rsiSignal = 0;  rsiTexto = 'RSI ' + rsi.toFixed(0) + ' — neutro'; }
+  }
+
+  // ── Indicador 3: MACD (confirmação) ──
+  var macd = calcMACD(closes);
+  var macdSignal = 0;
+  var macdTexto = '';
+  if (macd) {
+    if (macd.hist > 0 && macd.macd > 0)      { macdSignal = 1;  macdTexto = 'MACD acima da linha de sinal e positivo — confirma alta'; }
+    else if (macd.hist < 0 && macd.macd < 0) { macdSignal = -1; macdTexto = 'MACD abaixo da linha de sinal e negativo — confirma baixa'; }
+    else if (macd.hist > 0)                  { macdSignal = 1;  macdTexto = 'Histograma MACD virando positivo — alta ganhando força'; }
+    else                                     { macdSignal = -1; macdTexto = 'Histograma MACD negativo — baixa ganhando força'; }
+  }
+
+  // ── Indicador 4: Distância da média (exaustão) ──
+  var distMM20 = mm20 ? ((spot - mm20) / mm20 * 100) : 0;
+  var exaustSignal = 0;
+  var exaustTexto = '';
+  if (Math.abs(distMM20) > 5) {
+    exaustSignal = distMM20 > 0 ? -1 : 1; // muito esticado = sinal de reversão
+    exaustTexto = 'Preço ' + Math.abs(distMM20).toFixed(1) + '% ' + (distMM20>0?'acima':'abaixo') + ' da MM20 — esticado, risco de reversão';
+  } else {
+    exaustTexto = 'Preço ' + Math.abs(distMM20).toFixed(1) + '% da MM20 — distância normal';
+  }
+
+  // ── Score ponderado (prioridade: MM > RSI > MACD > exaustão) ──
+  var pesos = { mm: 4, rsi: 3, macd: 2, exaust: 1 };
+  var scoreTotal = mmSignal*pesos.mm + rsiSignal*pesos.rsi + macdSignal*pesos.macd + exaustSignal*pesos.exaust;
+  var scoreMax = pesos.mm + pesos.rsi + pesos.macd + pesos.exaust;
+  var scorePct = scoreTotal / scoreMax; // -1 a +1
+
+  // Semáforo
+  var sem, semCor, semBg, semDesc;
+  if (scorePct >= 0.35) {
+    sem = 'VIÉS DE ALTA'; semCor = 'var(--green)'; semBg = 'rgba(0,230,118,0.12)';
+    semDesc = 'Condições favorecem VENDA DE PUT (apostar na alta/lateralização para cima)';
+  } else if (scorePct <= -0.35) {
+    sem = 'VIÉS DE BAIXA'; semCor = 'var(--red)'; semBg = 'rgba(255,61,87,0.12)';
+    semDesc = 'Condições favorecem VENDA DE CALL (apostar na baixa/lateralização para baixo)';
+  } else {
+    sem = 'NEUTRO'; semCor = 'var(--yellow)'; semBg = 'rgba(255,214,0,0.10)';
+    semDesc = 'Sem viés direcional claro — prefira venda de volatilidade (strangle/straddle) ou aguarde';
+  }
+
+  function indicadorRow(nome, sinal, texto, peso) {
+    var cor = sinal > 0 ? 'var(--green)' : sinal < 0 ? 'var(--red)' : 'var(--muted)';
+    var seta = sinal > 0 ? '▲' : sinal < 0 ? '▼' : '—';
+    var label = sinal > 0 ? 'ALTA' : sinal < 0 ? 'BAIXA' : 'NEUTRO';
+    return '<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">'
+      + '<div style="font-family:var(--mono);font-size:16px;color:' + cor + ';width:20px;text-align:center;flex-shrink:0">' + seta + '</div>'
+      + '<div style="flex:1">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center">'
+      + '<span style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--text)">' + nome + '</span>'
+      + '<span style="font-family:var(--mono);font-size:9px;font-weight:700;color:' + cor + '">' + label + ' <span style="color:var(--muted);font-weight:400">peso ' + peso + '</span></span>'
+      + '</div>'
+      + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px">' + texto + '</div>'
+      + '</div></div>';
+  }
+
+  // Posição do ponteiro no medidor (-1 a +1 → 0% a 100%)
+  var ponteiroPct = ((scorePct + 1) / 2 * 100).toFixed(0);
+
+  box.innerHTML =
+    // Semáforo principal
+    '<div style="background:' + semBg + ';border:1px solid ' + semCor + ';border-radius:10px;padding:16px;margin-bottom:14px;text-align:center">'
+    + '<div style="font-family:var(--mono);font-size:24px;font-weight:700;color:' + semCor + ';margin-bottom:4px">' + sem + '</div>'
+    + '<div style="font-family:var(--mono);font-size:11px;color:var(--text);line-height:1.4">' + semDesc + '</div>'
+    // Medidor
+    + '<div style="margin-top:14px;position:relative">'
+    + '<div style="height:8px;border-radius:4px;background:linear-gradient(to right, var(--red) 0%, var(--yellow) 50%, var(--green) 100%)"></div>'
+    + '<div style="position:absolute;top:-3px;left:' + ponteiroPct + '%;transform:translateX(-50%);width:4px;height:14px;background:var(--text);border-radius:2px;box-shadow:0 0 4px rgba(0,0,0,0.5)"></div>'
+    + '</div>'
+    + '<div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:8px;color:var(--muted);margin-top:3px">'
+    + '<span>BAIXA (venda call)</span><span>NEUTRO</span><span>ALTA (venda put)</span></div>'
+    + '</div>'
+    // Indicadores detalhados
+    + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Indicadores (ordem de prioridade)</div>'
+    + indicadorRow('1. Médias Móveis (tendência)', mmSignal, mmTexto, pesos.mm)
+    + indicadorRow('2. RSI 14 (momentum)', rsiSignal, rsiTexto, pesos.rsi)
+    + indicadorRow('3. MACD (confirmação)', macdSignal, macdTexto, pesos.macd)
+    + indicadorRow('4. Distância da MM20 (exaustão)', exaustSignal, exaustTexto, pesos.exaust)
+    // Dados de referência
+    + '<div style="margin-top:10px;font-family:var(--mono);font-size:9px;color:var(--muted);line-height:1.5">'
+    + 'Spot R$' + spot.toFixed(2) + ' · MM20 R$' + (mm20?mm20.toFixed(2):'—') + ' · MM50 R$' + (mm50?mm50.toFixed(2):'—')
+    + ' · RSI ' + (rsi?rsi.toFixed(0):'—') + ' · MACD ' + (macd?macd.macd.toFixed(2):'—')
+    + '<br>O viés sugere a DIREÇÃO; o Radar de Oportunidades abaixo sugere o STRIKE. Combine os dois: viés de alta → escolha uma venda de put da tabela verde.'
+    + '</div>';
+
+  // Guarda para o snapshot
+  viesData.semaforo = sem;
+  viesData.scorePct = scorePct;
 }
 
 function renderOportunidades() {
@@ -2024,6 +2237,14 @@ function buildSnap() {
 
   // Radar de Oportunidades no snapshot
   if (spot && seriesInfo.series) {
+    // Viés direcional
+    if (viesData && viesData.semaforo) {
+      s += '\nVIÉS DIRECIONAL: ' + viesData.semaforo + ' (score ' + (viesData.scorePct*100).toFixed(0) + '%)\n';
+      var closesSnap = viesData.map(function(c){ return c.close; });
+      var mm20s = sma(closesSnap, 20), mm50s = sma(closesSnap, 50), rsis = calcRSI(closesSnap, 14);
+      s += '  MM20 R$' + (mm20s?mm20s.toFixed(2):'—') + ' · MM50 R$' + (mm50s?mm50s.toFixed(2):'—') + ' · RSI ' + (rsis?rsis.toFixed(0):'—') + '\n';
+    }
+
     var mensaisSnap = seriesInfo.series
       .filter(function(x){ return isMonthlyExpiry(x.due_date) && x.days_to_maturity >= 10; })
       .slice(0, 3);
