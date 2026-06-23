@@ -307,7 +307,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
 <script>
 var API = 'https://api.oplab.com.br/v3';
-var APP_VERSION = 'v1.5 · 19/jun/2026';
+var APP_VERSION = 'v1.7 · 19/jun/2026';
 var tok = '';
 var spotData = {};
 var radarData = {};
@@ -391,6 +391,8 @@ async function refreshAll() {
   ico.style.animation = 'spin .8s linear infinite';
   try {
     await Promise.all([loadStatus(), loadSpot(), loadSeries(), loadStrategies(), loadVolatility()]);
+    // Re-renderiza a faixa de preço agora que radarData.ivCur (iv_current) está disponível
+    if (typeof onExpiry === 'function') { try { await onExpiry(); } catch(e){} }
     await loadRadar();
     await loadVies();
     renderOportunidades();
@@ -1557,19 +1559,28 @@ function renderRange(options, serie) {
   // Cascata: tenta várias fontes, usa a primeira que retornar IV válida (> 0)
   var ivPct = 0;
 
-  // Fonte 1: IV da opção ATM da cadeia (prefere call, ignora IV degenerada < 5%)
-  if (options && options.length) {
+  // Fonte 1 (primária): IV atual do BOVA11 — a MESMA que o box de Volatilidade exibe (iv_current).
+  // Mantém os dois boxes consistentes com o "IV Atual" do Oplab.
+  if (radarData.ivCur) {
+    ivPct = normIv(radarData.ivCur);
+  }
+
+  // Fonte 2: IV da opção ATM da cadeia (fallback se iv_current não estiver disponível)
+  if (ivPct <= 0 && options && options.length) {
     var atmStrike = options.reduce(function(b,o){ return (!b || Math.abs(o.strike-spot) < Math.abs(b.strike-spot)) ? o : b; }, null);
     if (atmStrike) {
       var k = atmStrike.strike;
-      // Pega todas as opções desse strike, prefere call
       var sameStrike = options.filter(function(o){ return Math.abs(o.strike - k) < 0.01; });
       var callAtm = sameStrike.find(function(o){ return o.category === 'CALL'; });
       var putAtm  = sameStrike.find(function(o){ return o.category === 'PUT';  });
-      // Usa a maior IV entre call e put do strike (a degenerada é artificialmente baixa)
       var ivCall = callAtm ? normIv(callAtm.implied_volatility) : 0;
       var ivPut  = putAtm  ? normIv(putAtm.implied_volatility)  : 0;
-      ivPct = Math.max(ivCall, ivPut);
+      if (ivCall > 0 && ivPut > 0) {
+        var menor = Math.min(ivCall, ivPut), maior = Math.max(ivCall, ivPut);
+        ivPct = (menor < maior * 0.6) ? maior : (ivCall + ivPut) / 2;
+      } else {
+        ivPct = Math.max(ivCall, ivPut);
+      }
     }
   }
   // Fonte 2: spot-iv da posição
