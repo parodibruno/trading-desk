@@ -307,7 +307,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
 <script>
 var API = 'https://api.oplab.com.br/v3';
-var APP_VERSION = 'v1.4 · 19/jun/2026';
+var APP_VERSION = 'v1.5 · 19/jun/2026';
 var tok = '';
 var spotData = {};
 var radarData = {};
@@ -1642,19 +1642,24 @@ function calcPayoffNow(legs) {
     var cur    = leg.current;
     var qty    = leg.amount || 0;
     var close  = leg.close || 0;
+    var ask    = leg.ask || 0;
+    var bid    = leg.bid || 0;
     var action = leg.type || 'SELL';
     // Perna já zerada (amount = 0): P&L é o realizado, vem em current
     if (qty === 0) {
       if (cur != null) pnl += cur;
-      // se current também não existe, a perna não contribui (já realizada e contabilizada no desmontado)
       return;
     }
-    if (cur != null && cur !== 0) {
-      pnl += ini + cur;
-    } else {
-      if (action === 'SELL') pnl += ini - (close * qty);
-      else                   pnl += (close * qty) - Math.abs(ini);
-    }
+    // Preço de referência para fechar a posição agora:
+    // - vendido (SELL): paga o ASK para recomprar
+    // - comprado (BUY): recebe o BID para vender
+    // Fallback para close quando bid/ask = 0 (sem cotação)
+    var refPrice;
+    if (action === 'SELL') refPrice = ask > 0 ? ask : close;
+    else                   refPrice = bid > 0 ? bid : close;
+    // P&L = crédito original (initial, já com sinal) menos custo de recompra
+    if (action === 'SELL') pnl += ini - (refPrice * qty);
+    else                   pnl += (refPrice * qty) - Math.abs(ini);
   });
   return pnl;
 }
