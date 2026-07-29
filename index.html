@@ -304,7 +304,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
       <div style="color:var(--muted);margin:12px 0 8px;text-transform:uppercase;letter-spacing:.08em;font-size:9px">Movimentos · desce a lista até um resolver</div>
       <div style="margin-bottom:10px"><span style="color:var(--green);font-weight:700">1. Recentrar</span> — aproximar o strike da perna que está ganhando<br>
         &nbsp;&nbsp;Entra crédito, reduz delta líquido, não aumenta risco do lado testado.<br>
-        &nbsp;&nbsp;É o único movimento que paga você para reduzir delta. Sempre avalie primeiro.</div>
+        &nbsp;&nbsp;É o único movimento que paga você para reduzir delta. Sempre avalie primeiro.<br>
+        &nbsp;&nbsp;Quando recomendado, o Radar já sugere o strike alvo (delta = gatilho do Nível A) e o crédito/débito estimado com a cotação real da cadeia, ou Black-Scholes quando o strike não está cotado.</div>
       <div style="margin-bottom:10px"><span style="color:var(--yellow);font-weight:700">2. Afastar strike</span> — rolar no tempo afastando o strike<br>
         &nbsp;&nbsp;Condição: crédito líquido não negativo. Se só sai com débito, o preço já correu.<br>
         &nbsp;&nbsp;Destino da maioria dos gatilhos.</div>
@@ -327,7 +328,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 </div>
 <script>
 var API = 'https://api.oplab.com.br/v3';
-var APP_VERSION = 'v2.0 · movimentos em vez de degraus numerados';
+var APP_VERSION = 'v2.1 · sugestão de strike e custo ao recentrar';
 var tok = '';
 var spotData = {};
 var radarData = {};
@@ -644,6 +645,140 @@ function triggerPriceForLeg(leg, dte, ivPct, target) {
   var px = (lo + hi) / 2;
   if (px <= K * 0.56 || px >= K * 1.44) return null;
   return px;
+}
+// V2.1 — preco teorico (premio) via Black-Scholes, para custo de recentragem
+function bsPrice(spot, strike, dte_days, iv, isCall) {
+  if (!spot || !strike || !iv || dte_days <= 0) return null;
+  var T = dte_days / 252;
+  var r = 0.1075;
+  var sigma = iv > 3 ? iv/100 : iv;
+  if (sigma <= 0) return null;
+  var sqrtT = Math.sqrt(T);
+  var d1 = (Math.log(spot/strike) + (r + sigma*sigma/2)*T) / (sigma*sqrtT);
+  var d2 = d1 - sigma*sqrtT;
+  function normCDF(x) {
+    var t = 1/(1+0.2316419*Math.abs(x));
+    var d = 0.3989423*Math.exp(-x*x/2);
+    var p = d*t*(0.3193815+t*(-0.3565638+t*(1.781478+t*(-1.821256+t*1.330274))));
+    return x > 0 ? 1-p : p;
+  }
+  var disc = strike * Math.exp(-r*T);
+  if (isCall) return spot*normCDF(d1) - disc*normCDF(d2);
+  return disc*normCDF(-d2) - spot*normCDF(-d1);
+}
+// V2.1 — inverso de triggerPriceForLeg: acha o STRIKE (spot fixo) cujo delta
+// bate no alvo. Usado para sugerir pra onde recentrar a perna nao testada.
+function findStrikeForDelta(spot, dte, ivPct, isCall, target, moveTowardSpotFrom) {
+  if (!spot || !ivPct || dte <= 0 || !target) return null;
+  var lo = spot * 0.55, hi = spot * 1.45;
+  for (var i = 0; i < 80; i++) {
+    var mid = (lo + hi) / 2;
+    var g = bsGreeks(spot, mid, dte, ivPct, isCall);
+    if (!g) return null;
+    var d = Math.abs(g.delta);
+    // delta cai conforme strike se afasta do spot, para os dois lados
+    if (isCall) { if (d < target) hi = mid; else lo = mid; }
+    else        { if (d < target) lo = mid; else hi = mid; }
+  }
+  return (lo + hi) / 2;
+}
+// V2.1 — sugestao de recentragem: pra qual strike mover a perna nao testada
+// e qual o credito/debito estimado agora, usando cotacao real da cadeia
+// quando disponivel e Black-Scholes como fallback.
+function suggestRecentragem(pos) {
+  var tr = pos ? checkRollTriggers(pos) : null;
+  if (!tr || !tr.naoTestada) return null;
+  var alvo = tr.naoTestada;
+  var leg = alvo.leg;
+  var isCall = alvo.tipo === 'CALL';
+  var spot = spotData.close || 0;
+  var dte = leg['days-to-maturity'] || tr.dte;
+  var dueDate = leg['due-date'] || (pos && pos['due-date']) || '';
+  if (!spot || !dte) return null;
+  var cache = buildGreeksCache();
+  var og = cache[leg.symbol || ''];
+  var ivPct = (og && og.iv > 0) ? normIvPct(og.iv) : (normIvPct(radarData.ivCur) || 20);
+  var targetDelta = tr.trigger;
+  var theoStrike = findStrikeForDelta(spot, dte, ivPct, isCall, targetDelta);
+  if (!theoStrike) return null;
+
+  // procura na cadeia real (mesma serie/tipo) o strike mais proximo do teorico,
+  // sempre entre o spot e o strike atual (movendo em direcao ao spot)
+  var real = null;
+  if (seriesInfo && seriesInfo.series) {
+    var serie = seriesInfo.series.find(function(s){ return s.due_date === dueDate; });
+    if (serie) {
+      var candidatos = (serie.strikes || [])
+        .map(function(sk){ return isCall ? sk.call : sk.put; })
+        .filter(function(o){ return o && o.symbol && o.bs && Math.abs(o.bs.delta||0) > 0; });
+      var dentroDaFaixa = candidatos.filter(function(o){
+        return isCall ? (o.strike < alvo.strike && o.strike > spot)
+                       : (o.strike > alvo.strike && o.strike < spot);
+      });
+      var pool = dentroDaFaixa.length ? dentroDaFaixa : candidatos;
+      if (pool.length) {
+        real = pool.slice().sort(function(a,b){
+          return Math.abs(Math.abs(a.bs.delta)-targetDelta) - Math.abs(Math.abs(b.bs.delta)-targetDelta);
+        })[0];
+      }
+    }
+  }
+
+  var qty = Math.abs(leg.amount || 0);
+  var custoFechar = (leg.ask && leg.ask > 0) ? leg.ask : (leg.close || bsPrice(spot, alvo.strike, dte, ivPct, isCall) || 0);
+
+  if (real) {
+    var creditoAbrir = (real.bid && real.bid > 0) ? real.bid : (real.close || 0);
+    var netPorContrato = creditoAbrir - custoFechar;
+    return {
+      real: true,
+      novoStrike: real.strike,
+      novoSymbol: real.symbol,
+      novoDelta: Math.abs(real.bs.delta || 0),
+      custoFechar: custoFechar,
+      creditoAbrir: creditoAbrir,
+      netPorContrato: netPorContrato,
+      netTotal: netPorContrato * qty,
+      qty: qty,
+      tipo: alvo.tipo,
+      strikeAtual: alvo.strike
+    };
+  }
+
+  // fallback teorico quando a serie nao tem esse strike cotado
+  var precoTeoricoNovo = bsPrice(spot, theoStrike, dte, ivPct, isCall);
+  if (precoTeoricoNovo == null) return null;
+  var netPorContratoT = precoTeoricoNovo - custoFechar;
+  return {
+    real: false,
+    novoStrike: theoStrike,
+    novoSymbol: null,
+    novoDelta: targetDelta,
+    custoFechar: custoFechar,
+    creditoAbrir: precoTeoricoNovo,
+    netPorContrato: netPorContratoT,
+    netTotal: netPorContratoT * qty,
+    qty: qty,
+    tipo: alvo.tipo,
+    strikeAtual: alvo.strike
+  };
+}
+// V2.1 — renderiza o resultado de suggestRecentragem no card do Radar
+function renderSugestaoRecentragem(sug) {
+  if (!sug) return '';
+  var netColor = sug.netTotal >= 0 ? 'var(--green)' : 'var(--red)';
+  var netLabel = sug.netTotal >= 0 ? 'crédito' : 'débito';
+  var alvoTxt = sug.novoSymbol
+    ? sug.novoSymbol + ' K' + sug.novoStrike.toFixed(2)
+    : 'K' + sug.novoStrike.toFixed(2) + ' (teórico, sem cotação nessa faixa)';
+  return '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);font-family:var(--mono);font-size:10px">'
+    + '<div style="color:var(--muted);margin-bottom:3px">Sugestão: fechar ' + sug.tipo + ' K' + sug.strikeAtual.toFixed(2) + ' → abrir ' + alvoTxt + ' (Δ' + (sug.novoDelta*100).toFixed(0) + ')</div>'
+    + '<div style="display:flex;justify-content:space-between">'
+    + '<span style="color:var(--muted)">Fechar R$' + sug.custoFechar.toFixed(2) + ' · Abrir R$' + sug.creditoAbrir.toFixed(2) + ' × ' + sug.qty + '</span>'
+    + '<span style="color:' + netColor + ';font-weight:700">' + (sug.netTotal>=0?'+':'') + 'R$' + Math.abs(sug.netTotal).toFixed(2) + ' ' + netLabel + '</span>'
+    + '</div>'
+    + (sug.real ? '' : '<div style="color:var(--yellow);margin-top:3px">estimativa via Black-Scholes — confira o strike real na cadeia</div>')
+    + '</div>';
 }
 function calcPositionGreeks(legs) {
   var cache = buildGreeksCache();
@@ -2176,20 +2311,20 @@ function getRolloverStage(legs, pctCapturado, dte, pos) {
     return { move:'encerrar', label:'Encerrar', desc:'DTE crítico com ' + pctCapturado.toFixed(0) + '% do crédito capturado — realizar o lucro', color:'var(--green)', urgency:'ACAO', tr:tr };
 
   if (tr && tr.netBreach && !tr.breaches.length)
-    return { move:'recentrar', label:'Recentrar', desc:'Delta líquido ' + tr.netDelta.toFixed(0) + ' estourou o orçamento de ' + tr.budget.toFixed(0) + ' sem nenhuma perna no gatilho — é concentração. Aproximar a perna vencedora gera crédito e reduz o líquido', color:'var(--yellow)', urgency:'ATENCAO', tr:tr };
+    return { move:'recentrar', label:'Recentrar', desc:'Delta líquido ' + tr.netDelta.toFixed(0) + ' estourou o orçamento de ' + tr.budget.toFixed(0) + ' sem nenhuma perna no gatilho — é concentração. Aproximar a perna vencedora gera crédito e reduz o líquido', color:'var(--yellow)', urgency:'ATENCAO', tr:tr, sug:suggestRecentragem(pos) };
 
   if (tr && tr.breaches.length) {
     var pior = tr.breaches.slice().sort(function(a,b){ return b.absDelta-a.absDelta; })[0];
     var dsc = pior.tipo + ' K' + pior.strike.toFixed(0) + ' em ' + (pior.absDelta*100).toFixed(0) + 'Δ (gatilho ' + (tr.trigger*100).toFixed(0) + 'Δ em ' + dte + ' DU)';
     if (pior.absDelta >= 0.50 || tr.breaches.length >= 2)
       return { move:'afastar', label:'Afastar strike', desc:dsc + ' — recentrar já não cobre. Rolar no tempo afastando o strike, com crédito líquido não negativo', color:'var(--yellow)', urgency:'ATENCAO', tr:tr };
-    return { move:'recentrar', label:'Recentrar', desc:dsc + ' — aproximar a perna vencedora primeiro: entra crédito e reduz o delta líquido', color:'var(--accent)', urgency:'MONITORAR', tr:tr };
+    return { move:'recentrar', label:'Recentrar', desc:dsc + ' — aproximar a perna vencedora primeiro: entra crédito e reduz o delta líquido', color:'var(--accent)', urgency:'MONITORAR', tr:tr, sug:suggestRecentragem(pos) };
   }
 
   if (nearestDist < 3 || (dte <= 7 && pctCapturado < 40))
     return { move:'afastar', label:'Afastar strike', desc:'Spot a ' + nearestDist.toFixed(1) + '% do breakeven — rolar no tempo afastando o strike, crédito líquido não negativo', color:'var(--yellow)', urgency:'ATENCAO', tr:tr };
   if (nearestDist < 6 || pctCapturado >= 50)
-    return { move:'recentrar', label:'Recentrar', desc:'Aproximar a perna vencedora — entra crédito e reduz o delta líquido antes de precisar afastar strike', color:'var(--accent)', urgency:'MONITORAR', tr:tr };
+    return { move:'recentrar', label:'Recentrar', desc:'Aproximar a perna vencedora — entra crédito e reduz o delta líquido antes de precisar afastar strike', color:'var(--accent)', urgency:'MONITORAR', tr:tr, sug:suggestRecentragem(pos) };
 
   return { move:'aguardar', label:'Aguardar', desc:'Delta líquido dentro do orçamento e nenhuma perna no gatilho', color:'var(--muted)', urgency:'', tr:tr };
 }
@@ -2342,6 +2477,7 @@ function renderRadarConduzir() {
       + '<div style="background:' + roll.color.replace(')',',0.10)').replace('var','rgba').replace('(--','(') + ';border:1px solid ' + roll.color + ';border-radius:6px;padding:10px">'
       + '<div style="font-family:var(--mono);font-size:11px;font-weight:700;color:' + roll.color + ';margin-bottom:3px">' + roll.label + '</div>'
       + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.4">' + roll.desc + '</div>'
+      + (roll.sug ? renderSugestaoRecentragem(roll.sug) : '')
       + '</div>'
       + '</div>';
   });
@@ -2491,6 +2627,13 @@ function buildSnap() {
       var pctSnap = mSnap.creditoTotal > 0 ? (calcPayoffNow(legs) / mSnap.creditoTotal * 100) : 0;
       var rollSnap = getRolloverStage(legs, pctSnap, pos['days-to-maturity']||0, pos);
       s += '  Radar: ' + rollSnap.label + ' — ' + rollSnap.desc + '\n';
+      if (rollSnap.sug) {
+        var sS = rollSnap.sug;
+        s += '  Sugestao: fechar ' + sS.tipo + ' K' + sS.strikeAtual.toFixed(2)
+          + ' -> abrir ' + (sS.novoSymbol || ('K'+sS.novoStrike.toFixed(2)+' teorico')) + ' (Δ' + (sS.novoDelta*100).toFixed(0) + ')'
+          + ' | ' + (sS.netTotal>=0?'credito':'debito') + ' R$' + Math.abs(sS.netTotal).toFixed(2)
+          + (sS.real ? '' : ' [estimado]') + '\n';
+      }
     });
     s += '  ────\n';
     s += '  P&L TOTAL: ' + (tPnl>=0?'+':'') + 'R$ ' + tPnl.toFixed(2) + '\n';
@@ -2630,6 +2773,14 @@ function buildChatContext() {
         + (tr.netBreach ? ' [NIVEL B DISPAROU]' : '') + '\n';
       if (tr.regra10) ctx += '  [REGRA 10 DU ATIVA] perna acima de 30D com menos de 10 DU\n';
       ctx += '  Radar: ' + roll.label + ' — ' + roll.desc + '\n';
+      if (roll.sug) {
+        var s = roll.sug;
+        ctx += '  Sugestao de recentragem: fechar ' + s.tipo + ' K' + s.strikeAtual.toFixed(2)
+          + ' -> abrir ' + (s.novoSymbol || ('K'+s.novoStrike.toFixed(2)+' teorico')) + ' (delta ' + (s.novoDelta*100).toFixed(0) + ')'
+          + ' | fechar R$' + s.custoFechar.toFixed(2) + ' abrir R$' + s.creditoAbrir.toFixed(2) + ' x' + s.qty
+          + ' = ' + (s.netTotal>=0?'credito':'debito') + ' R$' + Math.abs(s.netTotal).toFixed(2)
+          + (s.real ? '' : ' [estimado, sem cotacao real nessa faixa]') + '\n';
+      }
       ctx += '  Legs:\n';
       legs.forEach(function(leg) {
         ctx += '    ' + (leg.type||'SELL') + ' ' + (leg.amount||0) + 'x ' + (leg.symbol||'') + ' ' + (leg['instrument-type']||'') + ' K' + (leg.strike||0) + ' ' + fmtDate(leg['due-date']) + ' ' + (leg['days-to-maturity']||0) + 'du';
