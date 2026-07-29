@@ -290,7 +290,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   </div>
   <div class="card" style="background:var(--surface);border:1px solid var(--border)">
     <div class="ctitle" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center" onclick="var el=document.getElementById('guia-conteudo');el.style.display=el.style.display==='none'?'block':'none';this.style.opacity=el.style.display==='none'?0.6:1">
-      📖 Guia de Rolagem · Framework v1.8
+      📖 Guia de Rolagem · Framework v2.0
       <span style="font-size:12px;color:var(--muted)">clique para expandir</span>
     </div>
     <div id="guia-conteudo" style="display:none;margin-top:12px;font-family:var(--mono);font-size:10px;color:var(--text);line-height:1.6;max-height:300px;overflow-y:auto">
@@ -301,13 +301,20 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
         &nbsp;&nbsp;Fórmula: Orçamento = Capital / Strike × 10%</div>
       <div style="margin-bottom:10px"><span style="color:var(--accent);font-weight:700">Regra dos 10 DU:</span> perna &gt;30Δ não atravessa 10 DU<br>
         &nbsp;&nbsp;Nessa faixa: decisão é binária (encerrar ou rolar pra fora)</div>
-      <div style="margin-bottom:10px"><span style="color:var(--green);font-weight:700">Degrau 0:</span> recentrar pela perna NÃO testada (gera crédito)</div>
-      <div style="margin-bottom:10px"><span style="color:var(--accent);font-weight:700">Degrau 1:</span> Rolagem 1 — rola no tempo, mesmo strike</div>
-      <div style="margin-bottom:10px"><span style="color:var(--yellow);font-weight:700">Degrau 2:</span> Rolagem 2 — rola tempo + afasta strike (straddle 50/50)</div>
-      <div style="margin-bottom:10px"><span style="color:var(--red);font-weight:700">Degrau 3:</span> Rolagem 3 — tempo + strike + quantidade (GATE DURO)<br>
-        &nbsp;&nbsp;✓ VXBR calma/normal &nbsp;&nbsp;&nbsp;✓ Tamanho dentro do orçamento &nbsp;&nbsp;&nbsp;✓ Crédito ≥60% débito acumulado<br>
-        &nbsp;&nbsp;✓ Máximo 1x por estrutura &nbsp;&nbsp;&nbsp;✓ Sem evento macro na nova vencimento</div>
-      <div style="color:var(--muted);margin-top:10px;border-top:1px solid var(--border);padding-top:8px">Log essencial: Data, DTE, VXBR, delta no gatilho vs execução, delta líquido antes/depois, degrau, crédito/débito, resultado. Recalibra após 8+ roagens.</div>
+      <div style="color:var(--muted);margin:12px 0 8px;text-transform:uppercase;letter-spacing:.08em;font-size:9px">Movimentos · desce a lista até um resolver</div>
+      <div style="margin-bottom:10px"><span style="color:var(--green);font-weight:700">1. Recentrar</span> — aproximar o strike da perna que está ganhando<br>
+        &nbsp;&nbsp;Entra crédito, reduz delta líquido, não aumenta risco do lado testado.<br>
+        &nbsp;&nbsp;É o único movimento que paga você para reduzir delta. Sempre avalie primeiro.</div>
+      <div style="margin-bottom:10px"><span style="color:var(--yellow);font-weight:700">2. Afastar strike</span> — rolar no tempo afastando o strike<br>
+        &nbsp;&nbsp;Condição: crédito líquido não negativo. Se só sai com débito, o preço já correu.<br>
+        &nbsp;&nbsp;Destino da maioria dos gatilhos.</div>
+      <div style="margin-bottom:10px"><span style="color:var(--red);font-weight:700">3. Encerrar</span> — realizar a perda e sair<br>
+        &nbsp;&nbsp;Quando nem recentrar nem afastar traz o delta de volta ao orçamento.</div>
+      <div style="margin-bottom:10px"><span style="color:var(--red);font-weight:700">Abaixo de 10 DU</span> a lista encurta: rolar pra fora ou encerrar. Sem terceira opção.</div>
+      <div style="color:var(--muted);margin:12px 0 8px;text-transform:uppercase;letter-spacing:.08em;font-size:9px">Dois movimentos que saíram da lista</div>
+      <div style="margin-bottom:10px;color:var(--muted)">Rolar mantendo o strike foi absorvido em "afastar": o gatilho dispara em 42–48Δ, e rolar sem mudar o strike não traz esse delta de volta — paga dois spreads e continua fora.</div>
+      <div style="margin-bottom:10px;color:var(--muted)">Aumentar quantidade não é degrau, é exceção com 5 condições (VXBR calmo, dentro do orçamento, crédito ≥60% do débito acumulado, máximo 1x por estrutura, sem evento macro no novo vencimento). Cinco condições juntas quase nunca passam — tratar como degrau leva a racionalizar no calor do momento. Se um dia todas passarem, é decisão separada.</div>
+      <div style="color:var(--muted);margin-top:10px;border-top:1px solid var(--border);padding-top:8px">Log essencial: data, DTE, VXBR, delta no gatilho vs execução, delta líquido antes/depois, movimento usado, crédito/débito, resultado. Recalibra após 8+ rolagens.</div>
     </div>
   </div>
   <div class="snap">
@@ -320,7 +327,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 </div>
 <script>
 var API = 'https://api.oplab.com.br/v3';
-var APP_VERSION = 'v1.9 · radar expandido + recomendações consolidadas';
+var APP_VERSION = 'v2.0 · movimentos em vez de degraus numerados';
 var tok = '';
 var spotData = {};
 var radarData = {};
@@ -2144,8 +2151,13 @@ function checkRollTriggers(pos) {
     regra10:    dte < 10 && ordenadas.length > 0 && ordenadas[0].absDelta > 0.30
   };
 }
-// V1.8 — delta no comando. Mantem a taxonomia real do desk:
-// Rolagem 1 = rolar cedo 0x0 | Rolagem 2 = ambas em delta 50 | Rolagem 3 = strangle reverso
+// V2.0 — taxonomia por movimento, nao por numero.
+// Recentrar (gera credito) -> Afastar strike (credito >= 0) -> Encerrar (realiza).
+// Abaixo de 10 DU a lista encurta: Rolar pra fora ou Encerrar.
+// "Rolar 1" foi absorvido em Afastar strike: rolar mantendo strike nao traz
+// um delta de 45 de volta ao orcamento, so paga dois spreads.
+// "Rolar 3" (aumentar quantidade) nao e degrau, e excecao com 5 condicoes —
+// tratado como Encerrar para nao virar martingale no calor do momento.
 function getRolloverStage(legs, pctCapturado, dte, pos) {
   var spot = spotData.close || 168;
   var bes  = findBreakevens(legs);
@@ -2155,31 +2167,31 @@ function getRolloverStage(legs, pctCapturado, dte, pos) {
   var tr = pos ? checkRollTriggers(pos) : null;
 
   if (tr && tr.regra10)
-    return { stage:3, label:'Encerrar ou rolar pra fora', desc:'< 10 DU com perna acima de 30Δ — gamma domina, observar não é opção', color:'var(--red)', urgency:'URGENTE', tr:tr };
+    return { move:'sair', label:'Rolar pra fora ou encerrar', desc:'Menos de 10 DU com perna acima de 30Δ — gamma domina e observar não é opção. Decisão binária', color:'var(--red)', urgency:'URGENTE', tr:tr };
 
   if (dte <= 5 && nearestDist < 2)
-    return { stage:3, label:'Rolar 3 / Encerrar', desc:'Strangle reverso (deltas > 50) ou fechar agora', color:'var(--red)', urgency:'URGENTE', tr:tr };
+    return { move:'encerrar', label:'Encerrar', desc:'DTE crítico e spot a ' + nearestDist.toFixed(1) + '% do breakeven — realizar e sair', color:'var(--red)', urgency:'URGENTE', tr:tr };
 
   if (dte <= 5 && pctCapturado >= 50)
-    return { stage:0, label:'Encerrar', desc:'DTE crítico + 50% capturado — realizar lucro', color:'var(--green)', urgency:'ACAO', tr:tr };
+    return { move:'encerrar', label:'Encerrar', desc:'DTE crítico com ' + pctCapturado.toFixed(0) + '% do crédito capturado — realizar o lucro', color:'var(--green)', urgency:'ACAO', tr:tr };
 
   if (tr && tr.netBreach && !tr.breaches.length)
-    return { stage:1, label:'Rolar 1 · Nível B', desc:'Delta líquido ' + tr.netDelta.toFixed(0) + ' estourou o orçamento de ' + tr.budget.toFixed(0) + ' sem nenhuma perna no gatilho — concentração. Recentrar pela perna não testada (0x0)', color:'var(--yellow)', urgency:'ATENCAO', tr:tr };
+    return { move:'recentrar', label:'Recentrar', desc:'Delta líquido ' + tr.netDelta.toFixed(0) + ' estourou o orçamento de ' + tr.budget.toFixed(0) + ' sem nenhuma perna no gatilho — é concentração. Aproximar a perna vencedora gera crédito e reduz o líquido', color:'var(--yellow)', urgency:'ATENCAO', tr:tr };
 
   if (tr && tr.breaches.length) {
     var pior = tr.breaches.slice().sort(function(a,b){ return b.absDelta-a.absDelta; })[0];
     var dsc = pior.tipo + ' K' + pior.strike.toFixed(0) + ' em ' + (pior.absDelta*100).toFixed(0) + 'Δ (gatilho ' + (tr.trigger*100).toFixed(0) + 'Δ em ' + dte + ' DU)';
     if (pior.absDelta >= 0.50 || tr.breaches.length >= 2)
-      return { stage:2, label:'Rolar 2', desc:dsc + ' — convergir ambas para delta 50, manejo no crédito/0x0', color:'var(--yellow)', urgency:'ATENCAO', tr:tr };
-    return { stage:1, label:'Rolar 1', desc:dsc + ' — rolar cedo 0x0, crédito da perna não testada paga a testada', color:'var(--accent)', urgency:'MONITORAR', tr:tr };
+      return { move:'afastar', label:'Afastar strike', desc:dsc + ' — recentrar já não cobre. Rolar no tempo afastando o strike, com crédito líquido não negativo', color:'var(--yellow)', urgency:'ATENCAO', tr:tr };
+    return { move:'recentrar', label:'Recentrar', desc:dsc + ' — aproximar a perna vencedora primeiro: entra crédito e reduz o delta líquido', color:'var(--accent)', urgency:'MONITORAR', tr:tr };
   }
 
   if (nearestDist < 3 || (dte <= 7 && pctCapturado < 40))
-    return { stage:2, label:'Rolar 2', desc:'Straddle ambas delta 50 — manejo no crédito/0x0', color:'var(--yellow)', urgency:'ATENCAO', tr:tr };
+    return { move:'afastar', label:'Afastar strike', desc:'Spot a ' + nearestDist.toFixed(1) + '% do breakeven — rolar no tempo afastando o strike, crédito líquido não negativo', color:'var(--yellow)', urgency:'ATENCAO', tr:tr };
   if (nearestDist < 6 || pctCapturado >= 50)
-    return { stage:1, label:'Rolar 1', desc:'Rolar cedo — crédito de uma perna paga a outra (0x0)', color:'var(--accent)', urgency:'MONITORAR', tr:tr };
+    return { move:'recentrar', label:'Recentrar', desc:'Aproximar a perna vencedora — entra crédito e reduz o delta líquido antes de precisar afastar strike', color:'var(--accent)', urgency:'MONITORAR', tr:tr };
 
-  return { stage:-1, label:'Aguardar', desc:'Posição dentro do esperado', color:'var(--muted)', urgency:'', tr:tr };
+  return { move:'aguardar', label:'Aguardar', desc:'Delta líquido dentro do orçamento e nenhuma perna no gatilho', color:'var(--muted)', urgency:'', tr:tr };
 }
 function renderRadarEntrar() {
   var vxbr    = radarData.vxbr    || 0;
@@ -2250,7 +2262,7 @@ function renderRadarEntrar() {
     + '<div style="color:var(--red);margin-top:4px"><span style="color:var(--red)">Stop</span> = nova rolagem no mesmo venc. → estopa</div>'
     + '<div style="color:var(--green)"><span style="color:var(--green)">Mantem</span> = rolar pro proximo venc. 0x0 ou recebendo + IV alta</div>'
     + '</div>'
-    + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:12px 0 8px">Gatilho de Rolagem (v1.8)</div>'
+    + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:12px 0 8px">Gatilho de Rolagem</div>'
     + '<div style="background:var(--surface2);border-radius:6px;padding:10px;font-family:var(--mono);font-size:10px;line-height:1.8;color:var(--text)">'
     + '<div><span style="color:var(--accent)">Nível A</span> por perna, por DTE: 48Δ (>30du) · 42Δ (15-30) · 35Δ (10-15) · 28Δ (<10)</div>'
     + '<div><span style="color:var(--accent)">Nível B</span> delta líquido ≤ 10% do max puts' + (budget>0 ? ' = ' + budget.toFixed(0) : '') + '</div>'
@@ -2279,7 +2291,6 @@ function renderRadarConduzir() {
     var pctColor = pct >= 50 ? 'var(--green)' : pct >= 25 ? 'var(--accent)' : 'var(--muted)';
     var dteColor = dte <= 5 ? 'var(--red)' : dte <= 10 ? 'var(--yellow)' : 'var(--text)';
     var beColor  = nearestDist < 3 ? 'var(--red)' : nearestDist < 6 ? 'var(--yellow)' : 'var(--green)';
-    var urgBg    = roll.urgency === 'URGENTE' ? 'var(--red)' : roll.urgency === 'ACAO' ? 'var(--green)' : roll.urgency === 'ATENCAO' ? 'var(--yellow)' : roll.urgency === 'MONITORAR' ? 'var(--accent)' : 'var(--muted)';
     html += '<div style="background:var(--surface2);border-radius:8px;padding:14px;margin-bottom:12px;border-left:3px solid ' + roll.color + '">'
       + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
       + '<div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent)">' + (pos.name||'Posicao') + '</div>'
@@ -2354,42 +2365,42 @@ function renderRadarEncerrar() {
     var mainColor, mainLabel, mainDesc;
     var signals = [];
     if (tr.regra10) {
-      mainColor = 'var(--red)'; mainLabel = 'REGRA 10 DU';
-      mainDesc = 'Perna acima de 30Δ com menos de 10 DU — encerrar ou rolar pra fora, sem terceira opcao';
+      mainColor = 'var(--red)'; mainLabel = 'Rolar pra fora ou encerrar';
+      mainDesc = 'Perna acima de 30Δ com menos de 10 DU — sem terceira opcao';
       signals.push({ c:'var(--red)', t:'Perna testada em ' + (tr.testada?(tr.testada.absDelta*100).toFixed(0):'—') + 'Δ' });
       signals.push({ c:'var(--red)', t:'DTE: ' + dte + 'du — gamma domina' });
     } else if (dte <= 5 && nearestDist < 2) {
-      mainColor = 'var(--red)'; mainLabel = 'FECHAR AGORA';
-      mainDesc = 'DTE critico + proximo do breakeven — risco alto';
+      mainColor = 'var(--red)'; mainLabel = 'Encerrar';
+      mainDesc = 'DTE critico e spot junto do breakeven — realizar e sair';
       signals.push({ c:'var(--red)', t:'DTE: ' + dte + 'du — muito pouco tempo' });
       signals.push({ c:'var(--red)', t:'BE a apenas ' + nearestDist.toFixed(1) + '% do spot' });
     } else if (pct >= 50 && dte <= 10) {
-      mainColor = 'var(--green)'; mainLabel = 'REALIZAR LUCRO';
-      mainDesc = '50%+ capturado com DTE baixo — momento ideal de saida';
+      mainColor = 'var(--green)'; mainLabel = 'Encerrar';
+      mainDesc = '50%+ capturado com DTE baixo — realizar o lucro';
       signals.push({ c:'var(--green)', t:pct.toFixed(0) + '% do credito capturado' });
       signals.push({ c:'var(--yellow)', t:'Apenas ' + dte + 'du restantes' });
     } else if (tr.netBreach) {
-      mainColor = 'var(--yellow)'; mainLabel = 'NIVEL B ESTOURADO';
-      mainDesc = 'Delta liquido acima do orcamento da tranche — concentracao, recentrar antes de pensar em encerrar';
+      mainColor = 'var(--yellow)'; mainLabel = 'Recentrar';
+      mainDesc = 'Delta liquido acima do orcamento — e concentracao, nao motivo pra encerrar. Aproximar a perna vencedora gera credito';
       signals.push({ c:'var(--yellow)', t:'Delta liquido ' + tr.netDelta.toFixed(0) + ' / ' + tr.budget.toFixed(0) });
       signals.push({ c:'var(--muted)', t:'Capturado: ' + pct.toFixed(0) + '%' });
     } else if (nearestDist < 3) {
-      mainColor = 'var(--red)'; mainLabel = 'ALERTA BE';
-      mainDesc = 'Spot proximo do breakeven — rolar ou fechar urgente';
+      mainColor = 'var(--red)'; mainLabel = 'Afastar strike';
+      mainDesc = 'Spot junto do breakeven — rolar no tempo afastando o strike, ou sair';
       signals.push({ c:'var(--red)', t:'BE a ' + nearestDist.toFixed(1) + '% — zona de perigo' });
     } else if (dte <= 7) {
-      mainColor = 'var(--yellow)'; mainLabel = 'DECIDIR';
-      mainDesc = 'DTE baixo — rolar pro proximo venc. ou encerrar';
+      mainColor = 'var(--yellow)'; mainLabel = 'Rolar pra fora ou encerrar';
+      mainDesc = 'DTE baixo — janela de decisao, sem meio-termo';
       signals.push({ c:'var(--yellow)', t:dte + 'du — janela de decisao' });
       signals.push({ c:pct>=50?'var(--green)':'var(--muted)', t:pct.toFixed(0) + '% capturado ate agora' });
     } else if (pct >= 50) {
-      mainColor = 'var(--green)'; mainLabel = 'OPCIONAL';
+      mainColor = 'var(--green)'; mainLabel = 'Encerrar e opcional';
       mainDesc = '50%+ capturado — pode realizar, posicao ainda segura';
       signals.push({ c:'var(--green)', t:pct.toFixed(0) + '% do credito capturado' });
       signals.push({ c:'var(--muted)', t:dte + 'du ainda restando' });
     } else {
-      mainColor = 'var(--muted)'; mainLabel = 'AGUARDAR';
-      mainDesc = 'Posicao dentro do esperado — deixar o tempo trabalhar';
+      mainColor = 'var(--muted)'; mainLabel = 'Aguardar';
+      mainDesc = 'Delta liquido dentro do orcamento — deixar o tempo trabalhar';
       signals.push({ c:'var(--muted)', t:'DTE: ' + dte + 'du' });
       signals.push({ c:pct>=0?'var(--accent)':'var(--red)', t:'Capturado: ' + pct.toFixed(0) + '%' });
       signals.push({ c:'var(--green)', t:'Dist. BE: ' + nearestDist.toFixed(1) + '%' });
@@ -2658,22 +2669,30 @@ async function sendChat() {
     + 'Nao da recomendacao de investimento: aplica o framework do trader com os numeros do snapshot. '
     + 'SIZING: max puts = Capital / Strike, fatiado em 3 entradas delta 20/25. '
     + 'ZONAS VXBR: <15.13 evitar (vega negativo); 15.13-16.89 posicoes pequenas ~20%; 16.89-22.17 ate 2/3; >22.17 agressividade autorizada. '
-    + 'GATILHO DE ROLAGEM (v1.8) — checar SEMPRE os dois niveis: '
+    + 'GATILHO DE ROLAGEM — checar SEMPRE os dois niveis: '
     + 'Nivel A, por perna: limite de delta dirigido por DTE — 48 delta acima de 30 DU, 42 entre 15 e 30 DU, 35 entre 10 e 15 DU, 28 abaixo de 10 DU; '
     + 'subtrair 4 pontos de delta se VXBR > 22.17 (risco de gap). '
     + 'Nivel B, estrutura: delta liquido nao pode passar 10% do max puts. O Nivel B pode disparar mesmo sem nenhuma perna individual no gatilho — '
     + 'isso e concentracao (historicamente puts), e o erro mais caro do trader. Nunca omita essa checagem. '
     + 'REGRA DOS 10 DU: nenhuma perna acima de 30 delta atravessa 10 DU. Abaixo disso a decisao e binaria: encerrar ou rolar pra fora. Nao existe observar mais um pouco. '
-    + 'DEGRAUS (nesta ordem, so desce se o anterior nao resolver): '
-    + 'Rolagem 1 = rolar cedo 0x0, o credito da perna NAO testada paga a testada — e o unico degrau que gera credito, avalie sempre primeiro; '
-    + 'Rolagem 2 = convergir ambas as pernas para delta 50 (straddle), manejo no credito/0x0 — degrau favorito do trader; '
-    + 'Rolagem 3 = strangle reverso, deltas acima de 50, strikes cruzados — aceita nao ganhar para reduzir risco, trava zona de perda, use como ultimo recurso. '
+    + 'MOVIMENTOS (nesta ordem, so desce se o anterior nao trouxer o delta liquido de volta ao orcamento): '
+    + '1) RECENTRAR = aproximar o strike da perna que esta ganhando. Entra credito, reduz delta liquido, '
+    + 'nao aumenta o risco do lado testado. E o unico movimento que paga o trader para reduzir delta — avalie sempre primeiro; '
+    + '2) AFASTAR STRIKE = rolar no tempo afastando o strike, com credito liquido nao negativo. '
+    + 'Se so sai com debito, o preco ja correu. Destino da maioria dos gatilhos; '
+    + '3) ENCERRAR = realizar a perda e sair, quando nem recentrar nem afastar resolve. '
+    + 'Abaixo de 10 DU a lista encurta: rolar pra fora ou encerrar, sem terceira opcao. '
+    + 'NAO existe mais "Rolagem 1/2/3" numerada. Rolar mantendo o mesmo strike foi absorvido em AFASTAR, '
+    + 'porque o gatilho dispara em 42-48 delta e rolar sem mudar strike nao traz esse delta de volta — paga dois spreads e continua fora. '
+    + 'Aumentar quantidade nao e um degrau: e excecao com 5 condicoes (VXBR calmo/normal, dentro do orcamento da tranche, '
+    + 'credito novo >= 60% do debito acumulado, maximo uma vez por estrutura, sem evento macro no novo vencimento). '
+    + 'Cinco condicoes juntas quase nunca passam. Trate como ENCERRAR; se todas realmente passarem, e decisao separada, nunca o passo automatico depois de afastar. '
     + 'STOP: nova rolagem no mesmo vencimento = estopa a operacao. '
     + 'MANTER: rolar pro proximo vencimento 0x0 ou recebendo, com IV alta. '
     + 'BLOQUEIO DE EVENTO: se o novo vencimento contem COPOM ou data do calendario eleitoral 2026 e VXBR > 22.17, role com quantidade REDUZIDA. '
     + 'Overlay sazonal ago-out: trate como um nivel acima de severidade. '
-    + 'Ao responder sobre rolagem, sempre informe: qual nivel disparou com os numeros, qual degrau recomenda e por que os anteriores nao resolvem, '
-    + 'e uma linha de log no formato: data | DTE | VXBR | delta da perna | delta liquido antes>depois | degrau | credito ou debito | resultado. '
+    + 'Ao responder sobre rolagem, sempre informe: qual nivel disparou com os numeros, qual movimento recomenda e por que os anteriores nao resolvem, '
+    + 'e uma linha de log no formato: data | DTE | VXBR | delta da perna | delta liquido antes>depois | movimento | credito ou debito | resultado. '
     + 'Responda direto em portugues brasileiro, curto, com os numeros reais do snapshot.';
   try {
     var res = await fetch('https://api.anthropic.com/v1/messages', {
