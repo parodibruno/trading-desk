@@ -250,16 +250,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div class="ctitle">Minhas Estratégias · Posições em Aberto</div>
     <div id="pos-box"><div class="loading"><div class="spinner"></div>Carregando posições...</div></div>
   </div>
+  <div class="card">
+    <div class="ctitle">Recomendações Consolidadas · Posições Abertas</div>
+    <div id="recomendacoes-box"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
+  </div>
   <div class="card" id="radar-card">
-    <div class="ctitle">
-      Radar de Decisão
-      <div class="tabs" id="radar-tabs">
-        <button class="tab active" onclick="switchRadarTab('entrar',this)">Entrar</button>
-        <button class="tab" onclick="switchRadarTab('conduzir',this)">Conduzir</button>
-        <button class="tab" onclick="switchRadarTab('encerrar',this)">Encerrar</button>
-      </div>
+    <div class="ctitle">Radar de Decisão · 3 Perspectivas</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:12px" id="radar-box">
+      <div id="radar-entrar" style="border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--surface2)"><div class="loading"><div class="spinner"></div>Entrar...</div></div>
+      <div id="radar-conduzir" style="border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--surface2)"><div class="loading"><div class="spinner"></div>Conduzir...</div></div>
+      <div id="radar-encerrar" style="border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--surface2)"><div class="loading"><div class="spinner"></div>Encerrar...</div></div>
     </div>
-    <div id="radar-box"><div class="loading"><div class="spinner"></div>Carregando radar...</div></div>
   </div>
   <div class="card" id="vies-card">
     <div class="ctitle">
@@ -285,6 +286,28 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     <div class="chat-input-row">
       <input type="text" id="chat-input" placeholder="Ex: Vale rolar o straddle 171 agora? Como esta meu delta consolidado?" onkeydown="if(event.key==='Enter' && !event.shiftKey){sendChat();event.preventDefault()}" />
       <button class="chat-send-btn" id="chat-send-btn" onclick="sendChat()">Analisar →</button>
+    </div>
+  </div>
+  <div class="card" style="background:var(--surface);border:1px solid var(--border)">
+    <div class="ctitle" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center" onclick="var el=document.getElementById('guia-conteudo');el.style.display=el.style.display==='none'?'block':'none';this.style.opacity=el.style.display==='none'?0.6:1">
+      📖 Guia de Rolagem · Framework v1.8
+      <span style="font-size:12px;color:var(--muted)">clique para expandir</span>
+    </div>
+    <div id="guia-conteudo" style="display:none;margin-top:12px;font-family:var(--mono);font-size:10px;color:var(--text);line-height:1.6;max-height:300px;overflow-y:auto">
+      <div style="margin-bottom:10px"><span style="color:var(--accent);font-weight:700">Nível A (por perna):</span> limite de delta dirigido por DTE<br>
+        &nbsp;&nbsp;• &gt;30 DU: 48Δ &nbsp;&nbsp;&nbsp;• 15-30 DU: 42Δ &nbsp;&nbsp;&nbsp;• 10-15 DU: 35Δ &nbsp;&nbsp;&nbsp;• &lt;10 DU: 28Δ<br>
+        &nbsp;&nbsp;(VXBR &gt; 22.17: subtrair 4Δ por risco de gap)</div>
+      <div style="margin-bottom:10px"><span style="color:var(--accent);font-weight:700">Nível B (consolidado):</span> delta líquido ≤ 10% do max puts<br>
+        &nbsp;&nbsp;Fórmula: Orçamento = Capital / Strike × 10%</div>
+      <div style="margin-bottom:10px"><span style="color:var(--accent);font-weight:700">Regra dos 10 DU:</span> perna &gt;30Δ não atravessa 10 DU<br>
+        &nbsp;&nbsp;Nessa faixa: decisão é binária (encerrar ou rolar pra fora)</div>
+      <div style="margin-bottom:10px"><span style="color:var(--green);font-weight:700">Degrau 0:</span> recentrar pela perna NÃO testada (gera crédito)</div>
+      <div style="margin-bottom:10px"><span style="color:var(--accent);font-weight:700">Degrau 1:</span> Rolagem 1 — rola no tempo, mesmo strike</div>
+      <div style="margin-bottom:10px"><span style="color:var(--yellow);font-weight:700">Degrau 2:</span> Rolagem 2 — rola tempo + afasta strike (straddle 50/50)</div>
+      <div style="margin-bottom:10px"><span style="color:var(--red);font-weight:700">Degrau 3:</span> Rolagem 3 — tempo + strike + quantidade (GATE DURO)<br>
+        &nbsp;&nbsp;✓ VXBR calma/normal &nbsp;&nbsp;&nbsp;✓ Tamanho dentro do orçamento &nbsp;&nbsp;&nbsp;✓ Crédito ≥60% débito acumulado<br>
+        &nbsp;&nbsp;✓ Máximo 1x por estrutura &nbsp;&nbsp;&nbsp;✓ Sem evento macro na nova vencimento</div>
+      <div style="color:var(--muted);margin-top:10px;border-top:1px solid var(--border);padding-top:8px">Log essencial: Data, DTE, VXBR, delta no gatilho vs execução, delta líquido antes/depois, degrau, crédito/débito, resultado. Recalibra após 8+ roagens.</div>
     </div>
   </div>
   <div class="snap">
@@ -2011,20 +2034,46 @@ async function loadRadar() {
   } catch(e) {
     radarData.vxbr = normIvPct(radarData.ivCur);
   }
-  renderRadar(radarActiveTab);
+  renderRadar();
+  renderRecomendacoes();
 }
-function switchRadarTab(tab, el) {
-  radarActiveTab = tab;
-  document.querySelectorAll('#radar-tabs .tab').forEach(function(t){ t.classList.remove('active'); });
-  el.classList.add('active');
-  renderRadar(tab);
+function renderRadar() {
+  var entrarEl = document.getElementById('radar-entrar');
+  var conduzirEl = document.getElementById('radar-conduzir');
+  var encerrarEl = document.getElementById('radar-encerrar');
+  if (entrarEl) entrarEl.innerHTML = renderRadarEntrar();
+  if (conduzirEl) conduzirEl.innerHTML = renderRadarConduzir();
+  if (encerrarEl) encerrarEl.innerHTML = renderRadarEncerrar();
 }
-function renderRadar(tab) {
-  var box = document.getElementById('radar-box');
+function renderRecomendacoes() {
+  var box = document.getElementById('recomendacoes-box');
   if (!box) return;
-  if (tab === 'entrar')    box.innerHTML = renderRadarEntrar();
-  else if (tab === 'conduzir') box.innerHTML = renderRadarConduzir();
-  else                     box.innerHTML = renderRadarEncerrar();
+  if (!curPositions.length) {
+    box.innerHTML = '<div class="empty">Nenhuma posição aberta.</div>';
+    return;
+  }
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px">';
+  curPositions.forEach(function(pos) {
+    var legs = (pos.details && pos.details.legs) || [];
+    if (!legs.length) return;
+    var pnlNow = calcPayoffNow(legs);
+    var m = calcMetrics(pos);
+    var pct = m.creditoTotal > 0 ? (pnlNow / m.creditoTotal * 100) : 0;
+    var dte = pos['days-to-maturity'] || 0;
+    var roll = getRolloverStage(legs, pct, dte, pos);
+    var pnlColor = pnlNow >= 0 ? 'var(--green)' : 'var(--red)';
+    html += '<div style="background:var(--surface2);border:1px solid ' + roll.color + ';border-radius:8px;padding:12px">'
+      + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:6px">' + (pos.name||'Posição') + ' · ' + dte + 'du</div>'
+      + '<div style="font-family:var(--mono);font-size:13px;font-weight:700;color:' + roll.color + ';margin-bottom:4px">' + roll.label + '</div>'
+      + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:6px">' + roll.desc.substring(0,60) + '...</div>'
+      + '<div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px">'
+      + '<span style="color:' + pnlColor + '">' + (pnlNow>=0?'+':'') + 'R$' + pnlNow.toFixed(0) + '</span>'
+      + '<span style="color:var(--muted)">' + pct.toFixed(0) + '%</span>'
+      + '</div>'
+      + '</div>';
+  });
+  html += '</div>';
+  box.innerHTML = html;
 }
 function getVxbrZone(v) {
   if (v < 15.13) return { label:'EVITAR Vega negativo', color:'#4a90d9', bg:'rgba(74,144,217,0.12)', size:0,   sizeLabel:'EVITAR' };
@@ -2234,7 +2283,7 @@ function renderRadarConduzir() {
     html += '<div style="background:var(--surface2);border-radius:8px;padding:14px;margin-bottom:12px;border-left:3px solid ' + roll.color + '">'
       + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
       + '<div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent)">' + (pos.name||'Posicao') + '</div>'
-      + (roll.urgency ? '<div style="font-family:var(--mono);font-size:11px;font-weight:700;background:' + urgBg + ';color:#000;padding:3px 10px;border-radius:4px">' + roll.urgency + '</div>' : '')
+      + (roll.label ? '<div style="font-family:var(--mono);font-size:11px;font-weight:700;background:' + roll.color + ';color:#000;padding:3px 10px;border-radius:4px;text-transform:uppercase">' + roll.label + '</div>' : '')
       + '</div>'
       + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">'
       + '<div style="text-align:center"><div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:3px">DTE</div>'
