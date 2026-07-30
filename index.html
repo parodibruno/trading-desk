@@ -297,8 +297,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
       <div style="margin-bottom:10px"><span style="color:var(--accent);font-weight:700">Nível A (por perna):</span> limite de delta dirigido por DTE<br>
         &nbsp;&nbsp;• &gt;30 DU: 48Δ &nbsp;&nbsp;&nbsp;• 15-30 DU: 42Δ &nbsp;&nbsp;&nbsp;• 10-15 DU: 35Δ &nbsp;&nbsp;&nbsp;• &lt;10 DU: 28Δ<br>
         &nbsp;&nbsp;(VXBR &gt; 22.17: subtrair 4Δ por risco de gap)</div>
-      <div style="margin-bottom:10px"><span style="color:var(--accent);font-weight:700">Nível B (consolidado):</span> delta líquido ≤ 10% do max puts<br>
-        &nbsp;&nbsp;Fórmula: Orçamento = Capital / Strike × 10%</div>
+      <div style="margin-bottom:10px"><span style="color:var(--accent);font-weight:700">Nível B (carteira, em R$):</span> exposição direcional de TODAS as estruturas abertas ≤ Capital × 10%<br>
+        &nbsp;&nbsp;Medido em reais, não em cotas — assim strikes diferentes somam sem ambiguidade.<br>
+        &nbsp;&nbsp;Exposição R$ = delta líquido consolidado (cotas) × spot atual. Orçamento não muda com spot nem com strike, só quando você altera o Capital.</div>
       <div style="margin-bottom:10px"><span style="color:var(--accent);font-weight:700">Regra dos 10 DU:</span> perna &gt;30Δ não atravessa 10 DU<br>
         &nbsp;&nbsp;Nessa faixa: decisão é binária (encerrar ou rolar pra fora)</div>
       <div style="color:var(--muted);margin:12px 0 8px;text-transform:uppercase;letter-spacing:.08em;font-size:9px">Movimentos · desce a lista até um resolver</div>
@@ -328,7 +329,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 </div>
 <script>
 var API = 'https://api.oplab.com.br/v3';
-var APP_VERSION = 'v2.1 · sugestão de strike e custo ao recentrar';
+var APP_VERSION = 'v3.0 · Nível B consolidado da carteira, em R$';
 var tok = '';
 var spotData = {};
 var radarData = {};
@@ -370,10 +371,24 @@ function getLegDeltaTrigger(dte, vxbr) {
 }
 
 // Orcamento de delta liquido da estrutura (Nivel B), em delta-equivalente de cotas
-function getDeltaBudget() {
+// V3.0 — Nivel B agora e por carteira, medido em reais, nao em cotas por strike.
+// Cotas de strikes diferentes nao sao fungiveis (um cota no 165 nao vale o
+// mesmo que um cota no 175); comparar em R$ soma direto, sem escolher strike.
+// Orcamento fixo — nao oscila com spot nem com strike enquanto o Capital nao mudar.
+function getDeltaBudgetReais() {
+  return CAPITAL * DELTA_BUDGET_PCT;
+}
+// V3.0 — soma o delta liquido de TODAS as posicoes abertas (a carteira toda,
+// nao uma estrutura isolada) e converte pra R$ usando o spot atual.
+// E o numero que efetivamente compara contra o orcamento.
+function calcPortfolioNetDeltaReais() {
   var spot = spotData.close || 0;
-  if (!spot) return 0;
-  return (CAPITAL / spot) * DELTA_BUDGET_PCT;
+  var allLegs = [];
+  (curPositions || []).forEach(function(pos) {
+    ((pos.details && pos.details.legs) || []).forEach(function(l){ allLegs.push(l); });
+  });
+  var g = allLegs.length ? calcPositionGreeks(allLegs) : { delta: 0 };
+  return { deltaCotas: g.delta, deltaReais: g.delta * spot, spot: spot };
 }
 
 function onCapitalInput(val) {
@@ -381,8 +396,10 @@ function onCapitalInput(val) {
   if (v > 0) CAPITAL = v;
   var lbl = document.getElementById('delta-budget-label');
   if (lbl) {
-    var b = getDeltaBudget();
-    lbl.textContent = b > 0 ? 'orc. delta ' + b.toFixed(0) : '';
+    var b = getDeltaBudgetReais();
+    var port = calcPortfolioNetDeltaReais();
+    lbl.textContent = b > 0 ? 'orç. R$' + b.toFixed(0) + ' · carteira R$' + port.deltaReais.toFixed(0) : '';
+    lbl.style.color = (b > 0 && Math.abs(port.deltaReais) >= b) ? 'var(--red)' : 'var(--muted)';
   }
   renderRadar(radarActiveTab);
 }
@@ -2269,21 +2286,26 @@ function checkRollTriggers(pos) {
   });
 
   var g = calcPositionGreeks(abertas);
-  var budget = getDeltaBudget();
-  var netBreach = budget > 0 && Math.abs(g.delta) >= budget;
+  // V3.0 — Nivel B passou a ser da carteira toda, medido em R$, nao desta
+  // estrutura isolada em cotas. netDelta/netDeltaReais abaixo sao so contexto
+  // (quanto ESTA estrutura contribui); quem decide o alerta e o portfolio.
+  var budget = getDeltaBudgetReais();
+  var portfolio = calcPortfolioNetDeltaReais();
+  var netBreach = budget > 0 && Math.abs(portfolio.deltaReais) >= budget;
   var ordenadas = info.slice().sort(function(a,b){ return b.absDelta - a.absDelta; });
 
   return {
-    trigger:    trigger,
-    legs:       info,
-    breaches:   info.filter(function(x){ return x.breach; }),
-    testada:    ordenadas[0] || null,
-    naoTestada: ordenadas.length > 1 ? ordenadas[ordenadas.length-1] : null,
-    netDelta:   g.delta,
-    budget:     budget,
-    netBreach:  netBreach,
-    dte:        dte,
-    regra10:    dte < 10 && ordenadas.length > 0 && ordenadas[0].absDelta > 0.30
+    trigger:      trigger,
+    legs:         info,
+    breaches:     info.filter(function(x){ return x.breach; }),
+    testada:      ordenadas[0] || null,
+    naoTestada:   ordenadas.length > 1 ? ordenadas[ordenadas.length-1] : null,
+    netDelta:     g.delta,               // contribuicao desta estrutura, em cotas
+    portfolioDeltaReais: portfolio.deltaReais,  // carteira toda, em R$ — e o que dispara
+    budget:       budget,                // orcamento em R$ (Capital x 10%, fixo)
+    netBreach:    netBreach,
+    dte:          dte,
+    regra10:      dte < 10 && ordenadas.length > 0 && ordenadas[0].absDelta > 0.30
   };
 }
 // V2.0 — taxonomia por movimento, nao por numero.
@@ -2311,7 +2333,7 @@ function getRolloverStage(legs, pctCapturado, dte, pos) {
     return { move:'encerrar', label:'Encerrar', desc:'DTE crítico com ' + pctCapturado.toFixed(0) + '% do crédito capturado — realizar o lucro', color:'var(--green)', urgency:'ACAO', tr:tr };
 
   if (tr && tr.netBreach && !tr.breaches.length)
-    return { move:'recentrar', label:'Recentrar', desc:'Delta líquido ' + tr.netDelta.toFixed(0) + ' estourou o orçamento de ' + tr.budget.toFixed(0) + ' sem nenhuma perna no gatilho — é concentração. Aproximar a perna vencedora gera crédito e reduz o líquido', color:'var(--yellow)', urgency:'ATENCAO', tr:tr, sug:suggestRecentragem(pos) };
+    return { move:'recentrar', label:'Recentrar', desc:'Delta líquido da carteira R$' + tr.portfolioDeltaReais.toFixed(0) + ' estourou o orçamento de R$' + tr.budget.toFixed(0) + ' sem nenhuma perna no gatilho — é concentração. Aproximar a perna vencedora gera crédito e reduz o líquido', color:'var(--yellow)', urgency:'ATENCAO', tr:tr, sug:suggestRecentragem(pos) };
 
   if (tr && tr.breaches.length) {
     var pior = tr.breaches.slice().sort(function(a,b){ return b.absDelta-a.absDelta; })[0];
@@ -2363,7 +2385,8 @@ function renderRadarEntrar() {
     }
   }
   var vxbrLabel = vxbr > 0 ? vxbr.toFixed(2) : '...';
-  var budget = getDeltaBudget();
+  var budget = getDeltaBudgetReais();
+  var portfolioAtual = calcPortfolioNetDeltaReais();
   return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">'
     + '<div>'
     + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">VXBR · Zona Atual</div>'
@@ -2380,7 +2403,8 @@ function renderRadarEntrar() {
     + '<div class="grow"><span class="gname">IV / HV ratio</span><span class="gval" style="color:' + premColor + '">' + (ivHv > 0 ? ivHv.toFixed(2) : '—') + ' · ' + premLabel + '</span></div>'
     + '<div class="grow"><span class="gname">IV Rank</span><span class="gval" style="color:' + stratColor + '">' + ivRank.toFixed(1) + '</span></div>'
     + '<div class="grow"><span class="gname">DTE ideal</span><span class="gname" style="font-size:10px">' + bestDTE + '</span></div>'
-    + '<div class="grow"><span class="gname">Orçamento delta (Nível B)</span><span class="gval" style="color:var(--accent)">' + (budget>0?budget.toFixed(0):'—') + '</span></div>'
+    + '<div class="grow"><span class="gname">Orçamento (Nível B, carteira)</span><span class="gval" style="color:var(--accent)">' + (budget>0?'R$'+budget.toFixed(0):'—') + '</span></div>'
+    + '<div class="grow"><span class="gname">Exposição atual da carteira</span><span class="gval" style="color:' + (Math.abs(portfolioAtual.deltaReais)>=budget && budget>0 ? 'var(--red)' : 'var(--green)') + '">R$' + portfolioAtual.deltaReais.toFixed(0) + '</span></div>'
     + '</div>'
     + '<div>'
     + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Estrategia Sugerida</div>'
@@ -2390,7 +2414,7 @@ function renderRadarEntrar() {
     + '</div>'
     + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Position Sizing (3 entradas)</div>'
     + '<div style="background:var(--surface2);border-radius:6px;padding:10px;font-family:var(--mono);font-size:10px;line-height:1.8;color:var(--text)">'
-    + '<div><span style="color:var(--accent)">Max puts</span> = Capital / Strike</div>'
+    + '<div><span style="color:var(--accent)">Max puts (sizing na entrada)</span> = Capital / Strike da operação</div>'
     + '<div><span style="color:var(--accent)">Entrada 1</span> = 1/3 do max · delta 20/25</div>'
     + '<div><span style="color:var(--accent)">Entrada 2</span> = recompro 1/3 · vendo 2/3 · novo delta 20/25</div>'
     + '<div><span style="color:var(--accent)">Entrada 3</span> = recompro 2/3 · vendo 3/3 · novo delta 20/25</div>'
@@ -2400,7 +2424,7 @@ function renderRadarEntrar() {
     + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:12px 0 8px">Gatilho de Rolagem</div>'
     + '<div style="background:var(--surface2);border-radius:6px;padding:10px;font-family:var(--mono);font-size:10px;line-height:1.8;color:var(--text)">'
     + '<div><span style="color:var(--accent)">Nível A</span> por perna, por DTE: 48Δ (>30du) · 42Δ (15-30) · 35Δ (10-15) · 28Δ (<10)</div>'
-    + '<div><span style="color:var(--accent)">Nível B</span> delta líquido ≤ 10% do max puts' + (budget>0 ? ' = ' + budget.toFixed(0) : '') + '</div>'
+    + '<div><span style="color:var(--accent)">Nível B</span> exposição da carteira ≤ Capital × 10%' + (budget>0 ? ' = R$' + budget.toFixed(0) : '') + ' — soma TODAS as estruturas abertas, em R$</div>'
     + '<div style="color:var(--yellow)">VXBR > 22.17 → aperta 4Δ (risco de gap)</div>'
     + '<div style="color:var(--red)">Regra 10 DU: perna > 30Δ não atravessa 10 du</div>'
     + '</div>'
@@ -2452,7 +2476,8 @@ function renderRadarConduzir() {
       + (bes.length > 0 ? '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:8px">Breakevens: '
         + bes.map(function(be){ var d=Math.abs(be-spot)/spot*100; return '<span style="color:' + (d<4?'var(--yellow)':'var(--text)') + '">R$' + be.toFixed(2) + ' (' + d.toFixed(1) + '%)</span>'; }).join(' · ')
         + '</div>' : '')
-      // V1.8 — bloco de gatilhos por perna + Nivel B
+      // V3.0 — bloco de gatilhos por perna (Nivel A, desta estrutura) +
+      // Nivel B (carteira toda, em R$ — mesmo numero aparece em todas as posicoes)
       + (roll.tr ? (function(tr) {
           var rows = tr.legs.slice().sort(function(a,b){ return b.absDelta-a.absDelta; }).map(function(x) {
             var cor = x.breach ? 'var(--red)' : x.absDelta >= tr.trigger*0.85 ? 'var(--yellow)' : 'var(--muted)';
@@ -2468,9 +2493,12 @@ function renderRadarConduzir() {
             + '<div style="font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">'
             + 'Gatilhos · limite ' + (tr.trigger*100).toFixed(0) + 'Δ por perna (' + tr.dte + ' DU)</div>'
             + rows
-            + '<div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;padding:5px 0 0;margin-top:5px;border-top:1px solid var(--border)">'
-            + '<span style="color:var(--muted)">Delta líquido (Nível B)</span>'
-            + '<span style="color:' + netCor + ';font-weight:700">' + tr.netDelta.toFixed(0) + ' / ' + tr.budget.toFixed(0) + (tr.netBreach ? ' ⚠' : '') + '</span>'
+            + '<div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;padding:5px 0 0;margin-top:5px;border-top:1px solid var(--border);color:var(--muted)">'
+            + '<span>Contribuição desta estrutura</span><span>' + (tr.netDelta>=0?'+':'') + tr.netDelta.toFixed(0) + ' cotas-Δ</span>'
+            + '</div>'
+            + '<div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;padding:3px 0 0">'
+            + '<span style="color:var(--muted)">Delta líquido da carteira (Nível B)</span>'
+            + '<span style="color:' + netCor + ';font-weight:700">R$' + tr.portfolioDeltaReais.toFixed(0) + ' / R$' + tr.budget.toFixed(0) + (tr.netBreach ? ' ⚠' : '') + '</span>'
             + '</div>'
             + '</div>';
         })(roll.tr) : '')
@@ -2517,8 +2545,8 @@ function renderRadarEncerrar() {
       signals.push({ c:'var(--yellow)', t:'Apenas ' + dte + 'du restantes' });
     } else if (tr.netBreach) {
       mainColor = 'var(--yellow)'; mainLabel = 'Recentrar';
-      mainDesc = 'Delta liquido acima do orcamento — e concentracao, nao motivo pra encerrar. Aproximar a perna vencedora gera credito';
-      signals.push({ c:'var(--yellow)', t:'Delta liquido ' + tr.netDelta.toFixed(0) + ' / ' + tr.budget.toFixed(0) });
+      mainDesc = 'Delta liquido da carteira acima do orcamento — e concentracao, nao motivo pra encerrar. Aproximar a perna vencedora gera credito';
+      signals.push({ c:'var(--yellow)', t:'Carteira: R$' + tr.portfolioDeltaReais.toFixed(0) + ' / R$' + tr.budget.toFixed(0) });
       signals.push({ c:'var(--muted)', t:'Capturado: ' + pct.toFixed(0) + '%' });
     } else if (nearestDist < 3) {
       mainColor = 'var(--red)'; mainLabel = 'Afastar strike';
@@ -2574,7 +2602,7 @@ function buildSnap() {
   var zoneSnap = getVxbrZone(radarData.vxbr || normIvPct(radarData.ivCur));
   s += '  VXBR: ' + ((radarData.vxbr||0) > 0 ? radarData.vxbr.toFixed(2) : 'N/D')
      + ' | Zona: ' + zoneSnap.label + ' | Mao: ' + zoneSnap.sizeLabel + '\n';
-  s += '  Orcamento delta liquido (Nivel B): ' + getDeltaBudget().toFixed(0) + ' (capital R$' + CAPITAL.toFixed(0) + ')\n';
+  s += '  Orcamento de exposicao direcional (Nivel B, carteira toda): R$' + getDeltaBudgetReais().toFixed(0) + ' (capital R$' + CAPITAL.toFixed(0) + ' x 10%)\n';
   s += '\n';
   if (curOptions.length) {
     var atm = curOptions.filter(function(o){ return spot && Math.abs(o.strike-spot)/spot < 0.04; }).sort(function(a,b){ return a.strike-b.strike; });
@@ -2621,7 +2649,8 @@ function buildSnap() {
           + (x.breach ? ' [GATILHO]' : '')
           + ' | dispara em R$' + (x.triggerPx ? x.triggerPx.toFixed(2) : '—') + '\n';
       });
-      s += '  Delta liquido: ' + trSnap.netDelta.toFixed(0) + ' / orcamento ' + trSnap.budget.toFixed(0)
+      s += '  Contribuicao desta estrutura: ' + trSnap.netDelta.toFixed(0) + ' cotas-delta\n';
+      s += '  Delta liquido da CARTEIRA (Nivel B): R$' + trSnap.portfolioDeltaReais.toFixed(0) + ' / orcamento R$' + trSnap.budget.toFixed(0)
         + (trSnap.netBreach ? ' [NIVEL B ESTOURADO]' : '') + '\n';
       var mSnap = calcMetrics(pos);
       var pctSnap = mSnap.creditoTotal > 0 ? (calcPayoffNow(legs) / mSnap.creditoTotal * 100) : 0;
@@ -2745,7 +2774,7 @@ function buildChatContext() {
   ctx += 'VXBR: ' + (vxbr > 0 ? vxbr.toFixed(2) : 'N/D');
   ctx += ' | IV BOVA11: ' + ivCur.toFixed(2) + '% | HV (EWMA): ' + hvCur.toFixed(2) + '% | IV Rank: ' + ivRank.toFixed(1) + '\n';
   ctx += 'Zona: ' + zone.label + ' | Mao: ' + zone.sizeLabel + '\n';
-  ctx += 'Capital: R$' + CAPITAL.toFixed(0) + ' | Orcamento de delta liquido (Nivel B): ' + getDeltaBudget().toFixed(0) + '\n\n';
+  ctx += 'Capital: R$' + CAPITAL.toFixed(0) + ' | Orcamento de exposicao direcional (Nivel B, carteira toda): R$' + getDeltaBudgetReais().toFixed(0) + '\n\n';
   if (curPositions.length) {
     ctx += 'POSICOES ABERTAS:\n';
     curPositions.forEach(function(pos) {
@@ -2769,7 +2798,8 @@ function buildChatContext() {
           + (x.breach ? ' [NIVEL A DISPAROU]' : '')
           + ' | dispara em R$' + (x.triggerPx ? x.triggerPx.toFixed(2) : '—') + '\n';
       });
-      ctx += '  Delta liquido: ' + tr.netDelta.toFixed(0) + ' / orcamento ' + tr.budget.toFixed(0)
+      ctx += '  Contribuicao desta estrutura: ' + tr.netDelta.toFixed(0) + ' cotas-delta\n';
+      ctx += '  Delta liquido da CARTEIRA (Nivel B): R$' + tr.portfolioDeltaReais.toFixed(0) + ' / orcamento R$' + tr.budget.toFixed(0)
         + (tr.netBreach ? ' [NIVEL B DISPAROU]' : '') + '\n';
       if (tr.regra10) ctx += '  [REGRA 10 DU ATIVA] perna acima de 30D com menos de 10 DU\n';
       ctx += '  Radar: ' + roll.label + ' — ' + roll.desc + '\n';
@@ -2823,8 +2853,11 @@ async function sendChat() {
     + 'GATILHO DE ROLAGEM — checar SEMPRE os dois niveis: '
     + 'Nivel A, por perna: limite de delta dirigido por DTE — 48 delta acima de 30 DU, 42 entre 15 e 30 DU, 35 entre 10 e 15 DU, 28 abaixo de 10 DU; '
     + 'subtrair 4 pontos de delta se VXBR > 22.17 (risco de gap). '
-    + 'Nivel B, estrutura: delta liquido nao pode passar 10% do max puts. O Nivel B pode disparar mesmo sem nenhuma perna individual no gatilho — '
-    + 'isso e concentracao (historicamente puts), e o erro mais caro do trader. Nunca omita essa checagem. '
+    + 'Nivel B, carteira inteira, medido em REAIS (nao em cotas): soma o delta liquido de TODAS as estruturas abertas em BOVA11 '
+    + '(nao so a que esta sendo discutida), multiplica pelo spot atual, e compara contra o orcamento fixo = Capital x 10%. '
+    + 'Medir em R$ evita ter que escolher "qual strike" quando ha varias estruturas em strikes diferentes — cotas de strikes diferentes nao sao fungiveis, reais sao. '
+    + 'O Nivel B pode disparar mesmo sem nenhuma perna individual no gatilho — '
+    + 'isso e concentracao (historicamente puts), e o erro mais caro do trader. Nunca omita essa checagem, e sempre trate como exposicao da CARTEIRA, nunca de uma estrutura isolada. '
     + 'REGRA DOS 10 DU: nenhuma perna acima de 30 delta atravessa 10 DU. Abaixo disso a decisao e binaria: encerrar ou rolar pra fora. Nao existe observar mais um pouco. '
     + 'MOVIMENTOS (nesta ordem, so desce se o anterior nao trouxer o delta liquido de volta ao orcamento): '
     + '1) RECENTRAR = aproximar o strike da perna que esta ganhando. Entra credito, reduz delta liquido, '
