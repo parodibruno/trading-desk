@@ -1745,4 +1745,1262 @@ function calcMetrics(pos) {
   outLegs.forEach(function(leg) {
     var qty    = leg.amount || 0;
     var price  = leg.price  || leg['price-in'] || 0;
-    var action 
+    var action = leg.action || leg.type || 'BUY';
+    if (action === 'BUY') desmontado -= qty * price;
+    else                  desmontado += qty * price;
+  });
+  var projetadoHoje = 0;
+  legs.forEach(function(leg) {
+    var qty    = leg.amount || 0;
+    var ask    = leg.ask    || 0;
+    var close  = leg.close  || 0;
+    var bid    = leg.bid    || 0;
+    var action = leg.type   || 'SELL';
+    var refPrice = ask > 0 ? ask : (close > 0 ? close : bid);
+    if (action === 'SELL') projetadoHoje -= qty * refPrice;
+    else                   projetadoHoje += qty * refPrice;
+  });
+  var resultadoProjetado = creditoTotal + desmontado + projetadoHoje;
+  var lucroMax = 0;
+  legs.forEach(function(leg) {
+    var pxIn   = leg['price-in'] || 0;
+    var qty    = leg.amount      || 0;
+    var action = leg.type        || 'SELL';
+    if (action === 'SELL') lucroMax += pxIn * qty;
+    else                   lucroMax -= pxIn * qty;
+  });
+  // O P&L das parcelas ja fechadas esta integralmente contido em desmontado.
+  lucroMax += desmontado;
+  var dte     = pos ? (pos['days-to-maturity'] || 0) : 0;
+  var dueDate = pos ? (pos['due-date'] || '') : '';
+  var hasNakedCall = legs.some(function(l){
+    return l['instrument-type']==='CALL' && (l.type||'SELL')==='SELL';
+  });
+  var risco = hasNakedCall ? 'ILIMITADO' : null;
+  if (!risco) {
+    var maxRisco = 0;
+    legs.forEach(function(leg) {
+      if (leg['instrument-type']==='PUT' && (leg.type||'SELL')==='SELL') {
+        maxRisco += (leg.strike||0) * (leg.amount||0);
+      }
+    });
+    risco = maxRisco > 0 ? 'R$ ' + (maxRisco - creditoTotal).toFixed(2) : '???';
+  }
+  return {
+    creditoTotal:        creditoTotal,
+    desmontado:          desmontado,
+    projetadoHoje:       projetadoHoje,
+    resultadoProjetado:  resultadoProjetado,
+    lucroMax:            lucroMax,
+    risco:               risco,
+    dte:                 dte,
+    dueDate:             dueDate
+  };
+}
+function renderMetrics(m) {
+  var rp = m.resultadoProjetado;
+  var rpColor = rp >= 0 ? 'var(--green)' : 'var(--red)';
+  var rpLabel = rp >= 0 ? '(=) Lucro projetado' : '(=) Prejuizo projetado';
+  function row(label, sub, val, color) {
+    return '<div style="margin-bottom:10px">'
+      + '<div style="color:var(--muted);font-size:10px;line-height:1.3">' + label + '</div>'
+      + (sub ? '<div style="color:var(--muted);font-size:9px;margin-bottom:2px">' + sub + '</div>' : '')
+      + '<div style="font-size:12px;font-weight:600;color:' + (color||'var(--text)') + '">' + val + '</div>'
+      + '</div>';
+  }
+  function fmtR(v) { return (v>=0?'+':'') + 'R$ ' + Math.abs(v).toFixed(2); }
+  return row('(+) Credito total', 'Voce recebeu', fmtR(m.creditoTotal), 'var(--green)')
+    + row('(+) Desmontado ate agora', m.desmontado===0?'Zero':'Fechamentos parciais', fmtR(m.desmontado), m.desmontado>=0?'var(--green)':'var(--red)')
+    + row('(-) Projetado para hoje', 'Voce paga para desmontar', fmtR(m.projetadoHoje), m.projetadoHoje>=0?'var(--green)':'var(--red)')
+    + '<div style="border-top:1px solid var(--border);margin:8px 0"></div>'
+    + row(rpLabel, 'Resultado da operacao', fmtR(rp), rpColor)
+    + row('Lucro maximo estimado', 'Na data do vencimento', fmtR(m.lucroMax), 'var(--green)')
+    + row('Risco maximo estimado', 'Na data do vencimento', m.risco, 'var(--red)')
+    + row('Dias restantes', m.dueDate ? 'Prox. venc. ' + fmtDate(m.dueDate) : '', m.dte + ' du', 'var(--accent)');
+}
+function buildPayoffTabs(positions) {
+  var allLegs = [];
+  positions.forEach(function(pos) {
+    ((pos.details && pos.details.legs) || []).forEach(function(leg) { allLegs.push(leg); });
+  });
+  payoffTabs = [{ name: 'Consolidado', legs: allLegs, pos: null }];
+  positions.forEach(function(pos) {
+    var legs = (pos.details && pos.details.legs) || [];
+    if (legs.length) payoffTabs.push({ name: pos.name || ('Pos #'+pos.id), legs: legs, pos: pos });
+  });
+  var tabsEl = document.getElementById('payoff-tabs');
+  tabsEl.innerHTML = payoffTabs.map(function(t, i) {
+    return '<button class="tab' + (i===0?' active':'') + '" onclick="selectPayoffTab(' + i + ',this)">' + t.name + '</button>';
+  }).join('');
+  activePayoffIdx = 0;
+  document.getElementById('payoff-active-name').textContent = payoffTabs[0].name;
+  refreshMetrics(0);
+  drawMainPayoff(0);
+  setupPayoffHover();
+}
+function refreshMetrics(idx) {
+  var metricsEl = document.getElementById('payoff-metrics');
+  if (!metricsEl) return;
+  var mHtml = '';
+  var gLegs = [];
+  if (idx === 0) {
+    var mAll = { creditoTotal:0, desmontado:0, projetadoHoje:0, resultadoProjetado:0, lucroMax:0, risco:'???', dte:0, dueDate:'' };
+    var hasIlim = false;
+    payoffTabs.slice(1).forEach(function(t) {
+      if (!t.pos) return;
+      var m = calcMetrics(t.pos);
+      mAll.creditoTotal   += m.creditoTotal;
+      mAll.desmontado     += m.desmontado;
+      mAll.projetadoHoje  += m.projetadoHoje;
+      mAll.dte = Math.max(mAll.dte, m.dte);
+      mAll.dueDate = mAll.dueDate || m.dueDate;
+      if (m.risco === 'ILIMITADO') hasIlim = true;
+      ((t.pos.details&&t.pos.details.legs)||[]).forEach(function(l){ gLegs.push(l); });
+    });
+    mAll.resultadoProjetado = mAll.creditoTotal + mAll.desmontado + mAll.projetadoHoje;
+    mAll.lucroMax = mAll.creditoTotal + mAll.desmontado;
+    mAll.risco = hasIlim ? 'ILIMITADO' : 'Limitado';
+    mHtml = renderMetrics(mAll);
+  } else {
+    var pos = payoffTabs[idx] && payoffTabs[idx].pos;
+    if (pos) {
+      mHtml = renderMetrics(calcMetrics(pos));
+      gLegs = (pos.details && pos.details.legs) || [];
+    }
+  }
+  var g = calcPositionGreeks(gLegs);
+  var legsHtml = '';
+  if (gLegs.length) {
+    legsHtml = '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">'
+      + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Pernas · preço de montagem</div>';
+    gLegs.forEach(function(leg) {
+      var sym    = leg.symbol || '—';
+      var type   = leg['instrument-type'] || '';
+      var strike = leg.strike || 0;
+      var qty    = leg.amount || 0;
+      var action = leg.type || 'SELL';
+      var pxIn   = leg['price-in'] || 0;
+      var pxCur  = leg.close || 0;
+      var actCor = action === 'SELL' ? 'var(--red)' : 'var(--green)';
+      var actTxt = action === 'SELL' ? 'V' : 'C';
+      var tipoCor = type === 'PUT' ? 'var(--red)' : 'var(--green)';
+      legsHtml += '<div style="display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:10px;padding:3px 0">'
+        + '<span><span style="color:' + actCor + ';font-weight:700">' + actTxt + qty + '</span> '
+        + sym + ' <span style="color:' + tipoCor + '">' + type + '</span> K' + strike.toFixed(0) + '</span>'
+        + '<span style="color:var(--muted)">entrada <span style="color:var(--text);font-weight:700">R$' + pxIn.toFixed(2) + '</span> · atual R$' + pxCur.toFixed(2) + '</span>'
+        + '</div>';
+    });
+    legsHtml += '</div>';
+  }
+  metricsEl.innerHTML = mHtml
+    + legsHtml
+    + '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">'
+    + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Gregas</div>'
+    + renderGreeksRow(g, false)
+    + '</div>';
+  setTimeout(function() { drawMainPayoff(activePayoffIdx); }, 30);
+}
+function selectPayoffTab(idx, el) {
+  activePayoffIdx = idx;
+  document.querySelectorAll('#payoff-tabs .tab').forEach(function(t){ t.classList.remove('active'); });
+  el.classList.add('active');
+  document.getElementById('payoff-active-name').textContent = payoffTabs[idx].name;
+  refreshMetrics(idx);
+  drawMainPayoff(idx);
+  document.getElementById('payoff-details').style.display = 'none';
+}
+function drawMainPayoff(idx) {
+  var canvas = document.getElementById('payoff-main');
+  if (!canvas || !payoffTabs[idx]) return;
+  var legs = payoffTabs[idx].legs;
+  var spot = spotData.close || 168;
+  var ctx = canvas.getContext('2d');
+  var W = canvas.offsetWidth || 600;
+  var metricsEl = document.getElementById('payoff-metrics');
+  var H = metricsEl ? Math.max(metricsEl.offsetHeight, 240) : 280;
+  canvas.width = W;
+  canvas.height = H;
+  var lo = spot*0.80, hi = spot*1.20, n=240;
+  var prices = [];
+  for (var i=0; i<=n; i++) prices.push(lo+(hi-lo)*i/n);
+  var pnlsExp = calcPayoff(legs, prices);
+  var pnlsNow = prices.map(function(s){ return calcPayoffTodayAtPrice(legs, s); });
+  var pnlNowAtSpot = calcPayoffNow(legs);
+  var allVals = pnlsExp.concat(pnlsNow).concat([pnlNowAtSpot, 0]);
+  var minPnl = Math.min.apply(null, allVals);
+  var maxPnl = Math.max.apply(null, allVals);
+  var amp = maxPnl - minPnl || 1;
+  minPnl -= amp*0.08; maxPnl += amp*0.08;
+  var range = maxPnl - minPnl;
+  var padL=58, padR=16, padT=14, padB=22;
+  var toX = function(s){ return padL+(s-lo)/(hi-lo)*(W-padL-padR); };
+  var toY = function(p){ return padT+(maxPnl-p)/range*(canvas.height-padT-padB); };
+  ctx.clearRect(0,0,W,canvas.height);
+  for (var g=0; g<=5; g++) {
+    var gVal = minPnl+(maxPnl-minPnl)*g/5;
+    var gy = toY(gVal);
+    ctx.strokeStyle='rgba(30,39,56,0.9)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(padL,gy); ctx.lineTo(W-padR,gy); ctx.stroke();
+    ctx.fillStyle='#475569'; ctx.font='9px IBM Plex Mono,monospace'; ctx.textAlign='right';
+    var lbl = Math.abs(gVal)>=1000?(gVal/1000).toFixed(1)+'k':gVal.toFixed(0);
+    ctx.fillText('R$'+lbl, padL-4, gy+3);
+  }
+  ctx.textAlign='left';
+  var y0=toY(0);
+  ctx.strokeStyle='rgba(100,116,139,0.6)'; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(padL,y0); ctx.lineTo(W-padR,y0); ctx.stroke(); ctx.setLineDash([]);
+  ctx.save();
+  ctx.beginPath();
+  prices.forEach(function(s,i){ var x=toX(s),y=toY(Math.max(0,pnlsExp[i])); if(i===0)ctx.moveTo(x,y0); ctx.lineTo(x,y); });
+  ctx.lineTo(toX(prices[prices.length-1]),y0); ctx.closePath();
+  ctx.fillStyle='rgba(0,230,118,0.10)'; ctx.fill();
+  ctx.beginPath();
+  prices.forEach(function(s,i){ var x=toX(s),y=toY(Math.min(0,pnlsExp[i])); if(i===0)ctx.moveTo(x,y0); ctx.lineTo(x,y); });
+  ctx.lineTo(toX(prices[prices.length-1]),y0); ctx.closePath();
+  ctx.fillStyle='rgba(255,61,87,0.10)'; ctx.fill();
+  ctx.restore();
+  ctx.beginPath();
+  prices.forEach(function(s,i){ var x=toX(s),y=toY(pnlsNow[i]); if(i===0)ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+  ctx.strokeStyle='rgba(255,100,80,0.8)'; ctx.lineWidth=1.5; ctx.setLineDash([5,3]); ctx.stroke(); ctx.setLineDash([]);
+  ctx.beginPath();
+  prices.forEach(function(s,i){ var x=toX(s),y=toY(pnlsExp[i]); if(i===0)ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+  ctx.strokeStyle='#00d4ff'; ctx.lineWidth=2; ctx.stroke();
+  for (var i=1; i<prices.length; i++) {
+    if ((pnlsExp[i-1]<0) !== (pnlsExp[i]<0)) {
+      var be=(prices[i-1]+prices[i])/2, xbe=toX(be);
+      ctx.fillStyle='#ffd600'; ctx.beginPath(); ctx.arc(xbe,y0,3,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#ffd600'; ctx.font='9px IBM Plex Mono,monospace';
+      ctx.fillText('R$'+be.toFixed(1),xbe+4,y0-5);
+    }
+  }
+  var xSpot=toX(spot);
+  ctx.strokeStyle='rgba(0,212,255,0.5)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(xSpot,padT); ctx.lineTo(xSpot,canvas.height-padB); ctx.stroke();
+  ctx.fillStyle='#475569'; ctx.font='9px IBM Plex Mono,monospace';
+  ctx.fillText('R$'+lo.toFixed(0),padL,canvas.height-5);
+  ctx.textAlign='center'; ctx.fillText('R$'+spot.toFixed(0),xSpot,canvas.height-5);
+  ctx.textAlign='right'; ctx.fillText('R$'+hi.toFixed(0),W-padR,canvas.height-5);
+  ctx.textAlign='left';
+  ctx.fillStyle='#00d4ff'; ctx.fillRect(W-padR-82,padT,14,2);
+  ctx.fillStyle='#94a3b8'; ctx.font='9px IBM Plex Mono,monospace'; ctx.fillText('Vencimento',W-padR-66,padT+4);
+  ctx.strokeStyle='rgba(255,100,80,0.8)'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(W-padR-82,padT+12); ctx.lineTo(W-padR-68,padT+12); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle='#94a3b8'; ctx.fillText('Hoje',W-padR-66,padT+16);
+  var pExp=calcPayoffAtPrice(legs,spot);
+  ctx.fillStyle=pExp>=0?'#00e676':'#ff3d57'; ctx.font='bold 10px IBM Plex Mono,monospace';
+  ctx.fillText((pExp>=0?'+':'')+'R$'+pExp.toFixed(0),xSpot+4,padT+14);
+  canvas._payoffData={prices:prices,pnlsExp:pnlsExp,pnlsNow:pnlsNow,pnlNowAtSpot:pnlNowAtSpot,legs:legs,lo:lo,hi:hi,padL:padL,padR:padR,toX:toX,toY:toY,spot:spot,W:W};
+}
+function setupPayoffHover() {
+  var canvas=document.getElementById('payoff-main');
+  var tooltip=document.getElementById('payoff-tooltip');
+  if (!canvas) return;
+  canvas.onmousemove=function(e){
+    var d=canvas._payoffData; if(!d){tooltip.style.display='none';return;}
+    var rect=canvas.getBoundingClientRect();
+    var mx=(e.clientX-rect.left)*(canvas.width/rect.width);
+    var s=d.lo+(mx-d.padL)/(d.W-d.padL-d.padR)*(d.hi-d.lo);
+    if(s<d.lo||s>d.hi){tooltip.style.display='none';return;}
+    var pExp=calcPayoffAtPrice(d.legs,s);
+    var pNow=calcPayoffTodayAtPrice(d.legs,s);
+    document.getElementById('tt-price').textContent='Spot: R$ '+s.toFixed(2);
+    document.getElementById('tt-now').textContent='Hoje: '+(pNow>=0?'+':'')+' R$ '+pNow.toFixed(2);
+    document.getElementById('tt-exp').textContent='Vencimento: '+(pExp>=0?'+':'')+' R$ '+pExp.toFixed(2);
+    var tx=e.clientX-rect.left+14, ty=e.clientY-rect.top-55;
+    if(tx+210>rect.width) tx=e.clientX-rect.left-220;
+    if(ty<0) ty=10;
+    tooltip.style.left=tx+'px'; tooltip.style.top=ty+'px'; tooltip.style.display='block';
+  };
+  canvas.onmouseleave=function(){tooltip.style.display='none';};
+}
+function renderPayoffs(positions) {
+  setTimeout(function() { buildPayoffTabs(positions); }, 100);
+}
+function renderStrategyPayoff(canvasId, legs, spot) {
+  setTimeout(function() {
+    var canvas=document.getElementById(canvasId); if(!canvas) return;
+    var ctx=canvas.getContext('2d');
+    var W=canvas.offsetWidth||400; canvas.width=W; canvas.height=100;
+    var lo=spot*0.82,hi=spot*1.18,n=150,pad=20;
+    var prices=[]; for(var i=0;i<=n;i++) prices.push(lo+(hi-lo)*i/n);
+    var pnlsExp=calcPayoff(legs,prices);
+    var pnlsNow=prices.map(function(s){return calcPayoffTodayAtPrice(legs,s);});
+    var allV=pnlsExp.concat(pnlsNow).concat([0]);
+    var minP=Math.min.apply(null,allV),maxP=Math.max.apply(null,allV);
+    var rng=maxP-minP||1; minP-=rng*0.08; maxP+=rng*0.08; rng=maxP-minP;
+    var toX=function(s){return pad+(s-lo)/(hi-lo)*(W-pad*2);};
+    var toY=function(p){return pad+(maxP-p)/rng*(canvas.height-pad*2);};
+    ctx.clearRect(0,0,W,canvas.height);
+    var y0=toY(0);
+    ctx.strokeStyle='rgba(100,116,139,0.4)'; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(pad,y0); ctx.lineTo(W-pad,y0); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath();
+    prices.forEach(function(s,i){var x=toX(s),y=toY(pnlsNow[i]);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
+    ctx.strokeStyle='rgba(255,100,80,0.7)'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath();
+    prices.forEach(function(s,i){var x=toX(s),y=toY(pnlsExp[i]);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
+    ctx.strokeStyle='#00d4ff'; ctx.lineWidth=2; ctx.stroke();
+    var xSpot=toX(spot);
+    ctx.strokeStyle='rgba(0,212,255,0.4)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(xSpot,pad); ctx.lineTo(xSpot,canvas.height-pad); ctx.stroke();
+    ctx.fillStyle='#475569'; ctx.font='9px IBM Plex Mono,monospace';
+    ctx.fillText('R$'+lo.toFixed(0),pad,canvas.height-3);
+    ctx.fillText('R$'+hi.toFixed(0),W-pad-28,canvas.height-3);
+    var pExp=calcPayoffAtPrice(legs,spot);
+    ctx.fillStyle=pExp>=0?'#00e676':'#ff3d57'; ctx.font='bold 9px IBM Plex Mono,monospace';
+    ctx.fillText((pExp>=0?'+':'')+'R$'+pExp.toFixed(0),xSpot+3,pad+10);
+  }, 150);
+}
+function renderStrategies(positions) {
+  if (!positions.length) {
+    document.getElementById('pos-box').innerHTML = '<div class="empty">Nenhuma posição encontrada.</div>';
+    return;
+  }
+  var html = '';
+  var grandPnl = 0;
+  positions.forEach(function(pos) {
+    var legs = (pos.details && pos.details.legs) || [];
+    if (!legs.length) return;
+    var stratPnl = 0;
+    var rows = legs.map(function(leg) {
+      var sym    = leg.symbol || '—';
+      var type   = leg['instrument-type'] || '—';
+      var strike = leg.strike || 0;
+      var due    = leg['due-date'] || '—';
+      var qty    = leg.amount || 0;
+      var action = leg.type || leg.action || 'SELL';
+      var pxIn   = leg['price-in'] || 0;
+      var pxCur  = leg.close || 0;
+      var ini    = leg.initial || (pxIn * qty);
+      var pnl = calcPayoffNow([leg]);
+      stratPnl += pnl;
+      var pnlP = ini !== 0 ? (pnl / Math.abs(ini) * 100) : 0;
+      var pc = pnl >= 0 ? 'pg' : 'pr';
+      var qc = action === 'SELL' ? 'pr' : 'pg';
+      var dtm = leg['days-to-maturity'] || 0;
+      return '<tr>'
+        + '<td>' + sym + '</td>'
+        + '<td><span class="badge ' + (type==='PUT'?'put':'call') + '">' + type + '</span></td>'
+        + '<td>' + strike.toFixed(2) + '</td>'
+        + '<td>' + fmtDate(due) + ' · ' + dtm + 'du</td>'
+        + '<td class="' + qc + '">' + (action==='SELL'?'V':'C') + ' ' + qty + '</td>'
+        + '<td>' + pxIn.toFixed(2) + '</td>'
+        + '<td>' + pxCur.toFixed(2) + '</td>'
+        + '<td>' + (leg.bid||0).toFixed(2) + '</td>'
+        + '<td>' + (leg.ask||0).toFixed(2) + '</td>'
+        + '<td class="' + pc + '">' + (pnl>=0?'+':'') + 'R$ ' + pnl.toFixed(2) + '</td>'
+        + '<td class="' + pc + '">' + (pnlP>=0?'+':'') + pnlP.toFixed(1) + '%</td>'
+        + '</tr>';
+    }).join('');
+    grandPnl += stratPnl;
+    var sc = stratPnl >= 0 ? 'var(--green)' : 'var(--red)';
+    var dtm = pos['days-to-maturity'] || 0;
+    var cid = 'payoff-strat-' + positions.indexOf(pos);
+    html += '<div class="strat-block">'
+      + '<div class="strat-header">'
+      + '<div class="strat-name">' + (pos.name||('Posição #'+pos.id))
+      + '<span class="strat-und">' + (pos['spot-symbol']||'') + ' · ' + dtm + 'du · venc ' + fmtDate(pos['due-date']) + '</span></div>'
+      + '<div class="strat-pnl" style="color:' + sc + '">' + (stratPnl>=0?'+':'') + 'R$ ' + stratPnl.toFixed(2) + '</div>'
+      + '</div>'
+      + '<canvas id="' + cid + '" height="100" style="width:100%;display:block;margin-bottom:10px"></canvas>'
+      + '<div class="table-wrap"><table class="ptable"><thead><tr>'
+      + '<th>Ticker</th><th>Tipo</th><th>Strike</th><th>Venc.</th>'
+      + '<th>Op/Qtd</th><th>Entrada</th><th>Último</th><th>Bid</th><th>Ask</th><th>P&L R$</th><th>P&L %</th>'
+      + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+      + renderGreeksRow(calcPositionGreeks(legs), true)
+      + '</div>';
+  });
+  if (!html) { document.getElementById('pos-box').innerHTML = '<div class="empty">Sem legs nas posições.</div>'; return; }
+  var gc = grandPnl >= 0 ? 'var(--green)' : 'var(--red)';
+  var allLegsForGreeks = [];
+  positions.forEach(function(pos){ ((pos.details&&pos.details.legs)||[]).forEach(function(l){ allLegsForGreeks.push(l); }); });
+  var gTot = calcPositionGreeks(allLegsForGreeks);
+  html += '<div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    + '<div class="total-pnl">P&L Total: <span style="color:' + gc + '">' + (grandPnl>=0?'+':'') + 'R$ ' + grandPnl.toFixed(2) + '</span></div>'
+    + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted)">Gregas Consolidadas</div>'
+    + '</div>'
+    + renderGreeksRow(gTot, false)
+    + '</div>';
+  document.getElementById('pos-box').innerHTML = html;
+  var spot = spotData.close || 168;
+  positions.forEach(function(pos, idx) {
+    var legs = (pos.details && pos.details.legs) || [];
+    if (legs.length) renderStrategyPayoff('payoff-strat-' + idx, legs, spot);
+  });
+  renderPayoffs(positions);
+}
+function renderPnl(positions) {
+  var pnlAberto = 0, pnlRealizado = 0, nLegs = 0, nAbertas = 0;
+  var allLegs = [];
+  positions.forEach(function(pos) {
+    var legs = (pos.details && pos.details.legs) || [];
+    legs.forEach(function(leg) {
+      var qty = leg.amount || 0;
+      var legPnl = calcPayoffNow([leg]);
+      if (qty === 0) {
+        pnlRealizado += legPnl;
+      } else {
+        pnlAberto += legPnl;
+        nAbertas++;
+        allLegs.push(leg);
+      }
+      nLegs++;
+    });
+  });
+  var pnl = pnlAberto;
+  var pc = pnl >= 0 ? 'pos' : 'neg';
+  var g = calcPositionGreeks(allLegs);
+  var dColor = Math.abs(g.delta) < 50 ? 'var(--green)' : Math.abs(g.delta) < 150 ? 'var(--yellow)' : 'var(--red)';
+  var tColor = g.theta >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('pnl-box').innerHTML =
+    '<div class="grow"><span class="gname">P&L Aberto</span><span class="gval ' + pc + '">' + (pnl>=0?'+':'') + 'R$ ' + pnl.toFixed(2) + '</span></div>'
+    + (Math.abs(pnlRealizado) > 0.01
+      ? '<div class="grow"><span class="gname">P&L Realizado</span><span class="gval ' + (pnlRealizado>=0?'pos':'neg') + '">' + (pnlRealizado>=0?'+':'') + 'R$ ' + pnlRealizado.toFixed(2) + '</span></div>'
+      : '')
+    + '<div class="grow"><span class="gname">Estratégias</span><span class="gval neu">' + positions.length + '</span></div>'
+    + '<div class="grow"><span class="gname">Legs abertas</span><span class="gval neu">' + nAbertas + '</span></div>'
+    + (g.found > 0
+      ? '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">'
+        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">'
+        + '<div><div style="font-family:var(--mono);font-size:9px;color:var(--muted)">Δ Delta</div>'
+        + '<div style="font-family:var(--mono);font-size:15px;font-weight:700;color:' + dColor + '">' + (g.delta>=0?'+':'') + g.delta.toFixed(0) + '</div></div>'
+        + '<div><div style="font-family:var(--mono);font-size:9px;color:var(--muted)">Θ Theta/dia</div>'
+        + '<div style="font-family:var(--mono);font-size:15px;font-weight:700;color:' + tColor + '">' + (g.theta>=0?'+':'') + g.theta.toFixed(0) + '</div></div>'
+        + '<div><div style="font-family:var(--mono);font-size:9px;color:var(--muted)">Γ Gamma</div>'
+        + '<div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--muted)">' + (g.gamma>=0?'+':'') + g.gamma.toFixed(0) + '</div></div>'
+        + '<div><div style="font-family:var(--mono);font-size:9px;color:var(--muted)">ν Vega</div>'
+        + '<div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--muted)">' + (g.vega>=0?'+':'') + g.vega.toFixed(0) + '</div></div>'
+        + '</div></div>'
+      : '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:6px">Gregas: atualizar dados</div>'
+    );
+}
+function switchTab(tab, el) {
+  activeTab = tab;
+  document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+  el.classList.add('active');
+  renderChain(curOptions);
+}
+function toggleAuto() {
+  if (document.getElementById('auto').checked) {
+    autoTimer = setInterval(refreshAll, 30000);
+  } else {
+    clearInterval(autoTimer); autoTimer = null;
+  }
+}
+// ─── RADAR DE DECISÃO ────────────────────────────────────────────────────────
+async function loadRadar() {
+  try {
+    var r = await fetch('https://api.oplab.com.br/v3/market/quote?tickers=VXBR', { headers: hdr() });
+    if (r.ok) {
+      var arr = await r.json();
+      var q = Array.isArray(arr) ? (arr.find(function(x){ return x.symbol==='VXBR'; }) || arr[0]) : arr;
+      radarData.vxbr = q.close || q.last || 0;
+    }
+  } catch(e) {
+    radarData.vxbr = normIvPct(radarData.ivCur);
+  }
+  renderRadar();
+  renderRecomendacoes();
+}
+function renderRadar() {
+  var entrarEl = document.getElementById('radar-entrar');
+  var conduzirEl = document.getElementById('radar-conduzir');
+  var encerrarEl = document.getElementById('radar-encerrar');
+  if (entrarEl) entrarEl.innerHTML = renderRadarEntrar();
+  if (conduzirEl) conduzirEl.innerHTML = renderRadarConduzir();
+  if (encerrarEl) encerrarEl.innerHTML = renderRadarEncerrar();
+}
+function renderRecomendacoes() {
+  var box = document.getElementById('recomendacoes-box');
+  if (!box) return;
+  if (!curPositions.length) {
+    box.innerHTML = '<div class="empty">Nenhuma posição aberta.</div>';
+    return;
+  }
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px">';
+  curPositions.forEach(function(pos) {
+    var legs = (pos.details && pos.details.legs) || [];
+    if (!legs.length) return;
+    var pnlNow = calcPayoffNow(legs);
+    var m = calcMetrics(pos);
+    var pct = m.creditoTotal > 0 ? (pnlNow / m.creditoTotal * 100) : 0;
+    var dte = pos['days-to-maturity'] || 0;
+    var roll = getRolloverStage(legs, pct, dte, pos);
+    var pnlColor = pnlNow >= 0 ? 'var(--green)' : 'var(--red)';
+    html += '<div style="background:var(--surface2);border:1px solid ' + roll.color + ';border-radius:8px;padding:12px">'
+      + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:6px">' + (pos.name||'Posição') + ' · ' + dte + 'du</div>'
+      + '<div style="font-family:var(--mono);font-size:13px;font-weight:700;color:' + roll.color + ';margin-bottom:4px">' + roll.label + '</div>'
+      + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:6px">' + roll.desc.substring(0,60) + '...</div>'
+      + '<div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px">'
+      + '<span style="color:' + pnlColor + '">' + (pnlNow>=0?'+':'') + 'R$' + pnlNow.toFixed(0) + '</span>'
+      + '<span style="color:var(--muted)">' + pct.toFixed(0) + '%</span>'
+      + '</div>'
+      + '</div>';
+  });
+  html += '</div>';
+  box.innerHTML = html;
+}
+function getVxbrZone(v) {
+  if (v < 15.13) return { label:'EVITAR Vega negativo', color:'#4a90d9', bg:'rgba(74,144,217,0.12)', size:0,   sizeLabel:'EVITAR' };
+  if (v < 16.89) return { label:'Posicoes pequenas',     color:'#ffd600', bg:'rgba(255,214,0,0.10)',  size:20,  sizeLabel:'~20% do max' };
+  if (v < 22.17) return { label:'Ate 2/3 da posicao max', color:'#00e676', bg:'rgba(0,230,118,0.10)', size:67, sizeLabel:'Ate 67% do max' };
+  return           { label:'Autorizada agressividade',   color:'#ff3d57', bg:'rgba(255,61,87,0.12)',  size:100, sizeLabel:'100% — agressivo' };
+}
+function findBreakevens(legs) {
+  var spot = spotData.close || 168;
+  var lo = spot * 0.65, hi = spot * 1.35, n = 400;
+  var bes = [], prev = calcPayoffAtPrice(legs, lo);
+  for (var i = 1; i <= n; i++) {
+    var s = lo + (hi - lo) * i / n;
+    var cur = calcPayoffAtPrice(legs, s);
+    if ((prev < 0) !== (cur < 0)) bes.push(lo + (hi-lo)*(i-0.5)/n);
+    prev = cur;
+  }
+  return bes;
+}
+// V1.8 — Nivel A: teto de delta por perna. Nivel B: teto de delta liquido.
+// Retorna pernas em violacao, perna testada, nao testada e precos-gatilho.
+function checkRollTriggers(pos) {
+  var legs    = (pos && pos.details && pos.details.legs) || [];
+  var abertas = legs.filter(function(l){ return (l.amount||0) !== 0; });
+  var dte     = (pos && pos['days-to-maturity']) || 0;
+  var vxbr    = radarData.vxbr || 0;
+  var trigger = getLegDeltaTrigger(dte, vxbr);
+  var cache   = buildGreeksCache();
+  var ivRef   = normIvPct(radarData.ivCur) || 20;
+  var spot    = spotData.close || 0;
+
+  var info = abertas.map(function(leg) {
+    var og = cache[leg.symbol || ''];
+    var d  = (og && Math.abs(og.delta) > 0.0001) ? og.delta : null;
+    var legDte = leg['days-to-maturity'] || dte;
+    if (d === null) {
+      var bs = bsGreeks(spot, leg.strike||0, legDte, ivRef, leg['instrument-type']==='CALL');
+      d = bs ? bs.delta : 0;
+    }
+    var ivLeg = (og && og.iv > 0) ? normIvPct(og.iv) : ivRef;
+    return {
+      leg: leg,
+      symbol: leg.symbol || '',
+      tipo: leg['instrument-type'] || '',
+      strike: leg.strike || 0,
+      delta: d,
+      absDelta: Math.abs(d),
+      breach: Math.abs(d) >= trigger,
+      triggerPx: triggerPriceForLeg(leg, legDte, ivLeg, trigger)
+    };
+  });
+
+  var g = calcPositionGreeks(abertas);
+  // V3.0 — Nivel B passou a ser da carteira toda, medido em R$, nao desta
+  // estrutura isolada em cotas. netDelta/netDeltaReais abaixo sao so contexto
+  // (quanto ESTA estrutura contribui); quem decide o alerta e o portfolio.
+  var budget = getDeltaBudgetReais();
+  var portfolio = calcPortfolioNetDeltaReais();
+  var netBreach = budget > 0 && Math.abs(portfolio.deltaReais) >= budget;
+  var ordenadas = info.slice().sort(function(a,b){ return b.absDelta - a.absDelta; });
+
+  return {
+    trigger:      trigger,
+    legs:         info,
+    breaches:     info.filter(function(x){ return x.breach; }),
+    testada:      ordenadas[0] || null,
+    naoTestada:   ordenadas.length > 1 ? ordenadas[ordenadas.length-1] : null,
+    netDelta:     g.delta,               // contribuicao desta estrutura, em cotas
+    portfolioDeltaReais: portfolio.deltaReais,  // carteira toda, em R$ — e o que dispara
+    budget:       budget,                // orcamento em R$ (Capital x 10%, fixo)
+    netBreach:    netBreach,
+    dte:          dte,
+    regra10:      dte < 10 && ordenadas.length > 0 && ordenadas[0].absDelta > 0.30
+  };
+}
+// V2.0 — taxonomia por movimento, nao por numero.
+// Recentrar (gera credito) -> Afastar strike (credito >= 0) -> Encerrar (realiza).
+// Abaixo de 10 DU a lista encurta: Rolar pra fora ou Encerrar.
+// "Rolar 1" foi absorvido em Afastar strike: rolar mantendo strike nao traz
+// um delta de 45 de volta ao orcamento, so paga dois spreads.
+// "Rolar 3" (aumentar quantidade) nao e degrau, e excecao com 5 condicoes —
+// tratado como Encerrar para nao virar martingale no calor do momento.
+function getRolloverStage(legs, pctCapturado, dte, pos) {
+  var spot = spotData.close || 168;
+  var bes  = findBreakevens(legs);
+  var nearestDist = 100;
+  bes.forEach(function(be){ var d = Math.abs(be-spot)/spot*100; if(d<nearestDist) nearestDist=d; });
+
+  var tr = pos ? checkRollTriggers(pos) : null;
+
+  if (tr && tr.regra10)
+    return { move:'sair', label:'Rolar pra fora ou encerrar', desc:'Menos de 10 DU com perna acima de 30Δ — gamma domina e observar não é opção. Decisão binária', color:'var(--red)', urgency:'URGENTE', tr:tr };
+
+  if (dte <= 5 && nearestDist < 2)
+    return { move:'encerrar', label:'Encerrar', desc:'DTE crítico e spot a ' + nearestDist.toFixed(1) + '% do breakeven — realizar e sair', color:'var(--red)', urgency:'URGENTE', tr:tr };
+
+  if (dte <= 5 && pctCapturado >= 50)
+    return { move:'encerrar', label:'Encerrar', desc:'DTE crítico com ' + pctCapturado.toFixed(0) + '% do crédito capturado — realizar o lucro', color:'var(--green)', urgency:'ACAO', tr:tr };
+
+  if (tr && tr.netBreach && !tr.breaches.length)
+    return { move:'recentrar', label:'Recentrar', desc:'Delta líquido da carteira R$' + tr.portfolioDeltaReais.toFixed(0) + ' estourou o orçamento de R$' + tr.budget.toFixed(0) + ' sem nenhuma perna no gatilho — é concentração. Aproximar a perna vencedora gera crédito e reduz o líquido', color:'var(--yellow)', urgency:'ATENCAO', tr:tr, sug:suggestRecentragem(pos) };
+
+  if (tr && tr.breaches.length) {
+    var pior = tr.breaches.slice().sort(function(a,b){ return b.absDelta-a.absDelta; })[0];
+    var dsc = pior.tipo + ' K' + pior.strike.toFixed(0) + ' em ' + (pior.absDelta*100).toFixed(0) + 'Δ (gatilho ' + (tr.trigger*100).toFixed(0) + 'Δ em ' + dte + ' DU)';
+    if (pior.absDelta >= 0.50 || tr.breaches.length >= 2)
+      return { move:'afastar', label:'Afastar strike', desc:dsc + ' — recentrar já não cobre. Rolar no tempo afastando o strike, com crédito líquido não negativo', color:'var(--yellow)', urgency:'ATENCAO', tr:tr };
+    return { move:'recentrar', label:'Recentrar', desc:dsc + ' — aproximar a perna vencedora primeiro: entra crédito e reduz o delta líquido', color:'var(--accent)', urgency:'MONITORAR', tr:tr, sug:suggestRecentragem(pos) };
+  }
+
+  if (nearestDist < 3 || (dte <= 7 && pctCapturado < 40))
+    return { move:'afastar', label:'Afastar strike', desc:'Spot a ' + nearestDist.toFixed(1) + '% do breakeven — rolar no tempo afastando o strike, crédito líquido não negativo', color:'var(--yellow)', urgency:'ATENCAO', tr:tr };
+  if (nearestDist < 6 || pctCapturado >= 50)
+    return { move:'recentrar', label:'Recentrar', desc:'Aproximar a perna vencedora — entra crédito e reduz o delta líquido antes de precisar afastar strike', color:'var(--accent)', urgency:'MONITORAR', tr:tr, sug:suggestRecentragem(pos) };
+
+  return { move:'aguardar', label:'Aguardar', desc:'Delta líquido dentro do orçamento e nenhuma perna no gatilho', color:'var(--muted)', urgency:'', tr:tr };
+}
+function renderRadarEntrar() {
+  var vxbr    = radarData.vxbr    || 0;
+  var ivRank  = radarData.ivRank  || 0;
+  var ivCur   = radarData.ivCur   || 0;
+  var hvCur   = radarData.hvCur   || 0;
+  var ivHv    = hvCur > 0 ? (ivCur / hvCur) : 0;
+  var zone    = getVxbrZone(vxbr);
+  var vxbrBar = Math.min(100, (vxbr / 30) * 100);
+  var stratLabel, stratDesc, stratColor;
+  if (zone.size === 0) {
+    stratLabel = 'Nao operar'; stratDesc = 'VXBR muito baixo — vega negativo arriscado'; stratColor = 'var(--red)';
+  } else if (ivRank >= 60) {
+    stratLabel = 'Straddle Vendido'; stratDesc = 'IV Rank elevado — vender ATM delta ~50/50'; stratColor = 'var(--green)';
+  } else if (ivRank >= 40) {
+    stratLabel = 'Strangle Vendido'; stratDesc = 'IV Rank moderado — vender delta 20/25'; stratColor = 'var(--accent)';
+  } else if (ivRank >= 25) {
+    stratLabel = 'Direcional'; stratDesc = 'IV Rank baixo — put ou call especifica com direcao clara'; stratColor = 'var(--yellow)';
+  } else {
+    stratLabel = 'Evitar vender vol'; stratDesc = 'IV Rank muito baixo — premio insuficiente'; stratColor = 'var(--red)';
+  }
+  var premLabel, premColor;
+  if (ivHv >= 1.3)      { premLabel = 'Excelente'; premColor = 'var(--green)'; }
+  else if (ivHv >= 1.1) { premLabel = 'Bom';       premColor = 'var(--accent)'; }
+  else if (ivHv >= 0.9) { premLabel = 'OK';         premColor = 'var(--yellow)'; }
+  else                  { premLabel = 'Fraco';      premColor = 'var(--red)'; }
+  var bestDTE = '—';
+  if (seriesInfo.series) {
+    var ideal = seriesInfo.series.filter(function(s){ return s.days_to_maturity >= 21 && s.days_to_maturity <= 45; });
+    if (ideal.length > 0) bestDTE = ideal[0].days_to_maturity + 'du · ' + fmtDate(ideal[0].due_date);
+    else {
+      var cl = seriesInfo.series.reduce(function(b,s){ return (!b||Math.abs(s.days_to_maturity-30)<Math.abs(b.days_to_maturity-30))?s:b; }, null);
+      if (cl) bestDTE = cl.days_to_maturity + 'du · ' + fmtDate(cl.due_date) + ' (fora do ideal 21-45du)';
+    }
+  }
+  var vxbrLabel = vxbr > 0 ? vxbr.toFixed(2) : '...';
+  var budget = getDeltaBudgetReais();
+  var portfolioAtual = calcPortfolioNetDeltaReais();
+  return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">'
+    + '<div>'
+    + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">VXBR · Zona Atual</div>'
+    + '<div style="background:' + zone.bg + ';border:1px solid ' + zone.color + ';border-radius:8px;padding:14px;margin-bottom:10px">'
+    + '<div style="font-family:var(--mono);font-size:32px;font-weight:700;color:' + zone.color + '">' + vxbrLabel + '</div>'
+    + '<div style="font-family:var(--mono);font-size:12px;font-weight:600;color:' + zone.color + ';margin-top:2px">' + zone.label + '</div>'
+    + '<div style="background:var(--surface2);border-radius:3px;height:8px;margin-top:12px;overflow:hidden;position:relative">'
+    + '<div style="width:' + vxbrBar + '%;height:100%;background:' + zone.color + ';border-radius:3px"></div>'
+    + '</div>'
+    + '<div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:3px">'
+    + '<span>13</span><span>15.13</span><span>16.89</span><span>22.17</span><span>30+</span></div>'
+    + '</div>'
+    + '<div class="grow"><span class="gname">Mao autorizada</span><span class="gval" style="color:' + zone.color + '">' + zone.sizeLabel + '</span></div>'
+    + '<div class="grow"><span class="gname">IV / HV ratio</span><span class="gval" style="color:' + premColor + '">' + (ivHv > 0 ? ivHv.toFixed(2) : '—') + ' · ' + premLabel + '</span></div>'
+    + '<div class="grow"><span class="gname">IV Rank</span><span class="gval" style="color:' + stratColor + '">' + ivRank.toFixed(1) + '</span></div>'
+    + '<div class="grow"><span class="gname">DTE ideal</span><span class="gname" style="font-size:10px">' + bestDTE + '</span></div>'
+    + '<div class="grow"><span class="gname">Orçamento (Nível B, carteira)</span><span class="gval" style="color:var(--accent)">' + (budget>0?'R$'+budget.toFixed(0):'—') + '</span></div>'
+    + '<div class="grow"><span class="gname">Exposição atual da carteira</span><span class="gval" style="color:' + (Math.abs(portfolioAtual.deltaReais)>=budget && budget>0 ? 'var(--red)' : 'var(--green)') + '">R$' + portfolioAtual.deltaReais.toFixed(0) + '</span></div>'
+    + '</div>'
+    + '<div>'
+    + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Estrategia Sugerida</div>'
+    + '<div style="background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.2);border-radius:8px;padding:14px;margin-bottom:12px">'
+    + '<div style="font-family:var(--mono);font-size:20px;font-weight:700;color:' + stratColor + ';margin-bottom:6px">' + stratLabel + '</div>'
+    + '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.5">' + stratDesc + '</div>'
+    + '</div>'
+    + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Position Sizing (3 entradas)</div>'
+    + '<div style="background:var(--surface2);border-radius:6px;padding:10px;font-family:var(--mono);font-size:10px;line-height:1.8;color:var(--text)">'
+    + '<div><span style="color:var(--accent)">Max puts (sizing na entrada)</span> = Capital / Strike da operação</div>'
+    + '<div><span style="color:var(--accent)">Entrada 1</span> = 1/3 do max · delta 20/25</div>'
+    + '<div><span style="color:var(--accent)">Entrada 2</span> = recompro 1/3 · vendo 2/3 · novo delta 20/25</div>'
+    + '<div><span style="color:var(--accent)">Entrada 3</span> = recompro 2/3 · vendo 3/3 · novo delta 20/25</div>'
+    + '<div style="color:var(--red);margin-top:4px"><span style="color:var(--red)">Stop</span> = nova rolagem no mesmo venc. → estopa</div>'
+    + '<div style="color:var(--green)"><span style="color:var(--green)">Mantem</span> = rolar pro proximo venc. 0x0 ou recebendo + IV alta</div>'
+    + '</div>'
+    + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:12px 0 8px">Gatilho de Rolagem</div>'
+    + '<div style="background:var(--surface2);border-radius:6px;padding:10px;font-family:var(--mono);font-size:10px;line-height:1.8;color:var(--text)">'
+    + '<div><span style="color:var(--accent)">Nível A</span> por perna, por DTE: 48Δ (>30du) · 42Δ (15-30) · 35Δ (10-15) · 28Δ (<10)</div>'
+    + '<div><span style="color:var(--accent)">Nível B</span> exposição da carteira ≤ Capital × 10%' + (budget>0 ? ' = R$' + budget.toFixed(0) : '') + ' — soma TODAS as estruturas abertas, em R$</div>'
+    + '<div style="color:var(--yellow)">VXBR > 22.17 → aperta 4Δ (risco de gap)</div>'
+    + '<div style="color:var(--red)">Regra 10 DU: perna > 30Δ não atravessa 10 du</div>'
+    + '</div>'
+    + '</div>'
+    + '</div>';
+}
+function renderRadarConduzir() {
+  if (!curPositions.length) return '<div class="empty">Nenhuma posicao aberta.</div>';
+  var spot = spotData.close || 168;
+  var html = '';
+  curPositions.forEach(function(pos) {
+    var legs = (pos.details && pos.details.legs) || [];
+    if (!legs.length) return;
+    var m = calcMetrics(pos);
+    var pnlNow = calcPayoffNow(legs);
+    var pct = m.creditoTotal > 0 ? (pnlNow / m.creditoTotal * 100) : 0;
+    var dte = pos['days-to-maturity'] || 0;
+    var bes = findBreakevens(legs);
+    var nearestBe = null, nearestDist = 100;
+    bes.forEach(function(be){ var d=Math.abs(be-spot)/spot*100; if(d<nearestDist){nearestDist=d;nearestBe=be;} });
+    var roll = getRolloverStage(legs, pct, dte, pos);
+    var pctCl = Math.min(100, Math.max(0, pct));
+    var pctColor = pct >= 50 ? 'var(--green)' : pct >= 25 ? 'var(--accent)' : 'var(--muted)';
+    var dteColor = dte <= 5 ? 'var(--red)' : dte <= 10 ? 'var(--yellow)' : 'var(--text)';
+    var beColor  = nearestDist < 3 ? 'var(--red)' : nearestDist < 6 ? 'var(--yellow)' : 'var(--green)';
+    html += '<div style="background:var(--surface2);border-radius:8px;padding:14px;margin-bottom:12px;border-left:3px solid ' + roll.color + '">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+      + '<div style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent)">' + (pos.name||'Posicao') + '</div>'
+      + (roll.label ? '<div style="font-family:var(--mono);font-size:11px;font-weight:700;background:' + roll.color + ';color:#000;padding:3px 10px;border-radius:4px;text-transform:uppercase">' + roll.label + '</div>' : '')
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">'
+      + '<div style="text-align:center"><div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:3px">DTE</div>'
+      + '<div style="font-family:var(--mono);font-size:18px;font-weight:700;color:' + dteColor + '">' + dte + '</div>'
+      + '<div style="font-family:var(--mono);font-size:9px;color:var(--muted)">dias uteis</div></div>'
+      + '<div style="text-align:center"><div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:3px">Capturado</div>'
+      + '<div style="font-family:var(--mono);font-size:18px;font-weight:700;color:' + pctColor + '">' + pct.toFixed(0) + '%</div>'
+      + '<div style="font-family:var(--mono);font-size:9px;color:var(--muted)">do credito</div></div>'
+      + '<div style="text-align:center"><div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:3px">P&L Atual</div>'
+      + '<div style="font-family:var(--mono);font-size:14px;font-weight:700;color:' + (pnlNow>=0?'var(--green)':'var(--red)') + '">' + (pnlNow>=0?'+':'') + 'R$' + Math.abs(pnlNow).toFixed(0) + '</div>'
+      + '<div style="font-family:var(--mono);font-size:9px;color:var(--muted)">aberto</div></div>'
+      + '<div style="text-align:center"><div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:3px">Dist. BE</div>'
+      + '<div style="font-family:var(--mono);font-size:18px;font-weight:700;color:' + beColor + '">' + (nearestBe ? nearestDist.toFixed(1)+'%' : '—') + '</div>'
+      + '<div style="font-family:var(--mono);font-size:9px;color:var(--muted)">do spot</div></div>'
+      + '</div>'
+      + '<div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:3px">Progresso do credito (' + pct.toFixed(0) + '%)</div>'
+      + '<div style="background:var(--bg);border-radius:3px;height:7px;margin-bottom:10px;overflow:hidden">'
+      + '<div style="width:' + pctCl + '%;height:100%;background:' + pctColor + ';border-radius:3px"></div>'
+      + '</div>'
+      + (bes.length > 0 ? '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:8px">Breakevens: '
+        + bes.map(function(be){ var d=Math.abs(be-spot)/spot*100; return '<span style="color:' + (d<4?'var(--yellow)':'var(--text)') + '">R$' + be.toFixed(2) + ' (' + d.toFixed(1) + '%)</span>'; }).join(' · ')
+        + '</div>' : '')
+      // V3.0 — bloco de gatilhos por perna (Nivel A, desta estrutura) +
+      // Nivel B (carteira toda, em R$ — mesmo numero aparece em todas as posicoes)
+      + (roll.tr ? (function(tr) {
+          var rows = tr.legs.slice().sort(function(a,b){ return b.absDelta-a.absDelta; }).map(function(x) {
+            var cor = x.breach ? 'var(--red)' : x.absDelta >= tr.trigger*0.85 ? 'var(--yellow)' : 'var(--muted)';
+            return '<div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;padding:2px 0">'
+              + '<span style="color:var(--text)">' + x.tipo + ' K' + x.strike.toFixed(0) + '</span>'
+              + '<span style="color:' + cor + ';font-weight:700">' + (x.absDelta*100).toFixed(0) + 'Δ'
+              + (x.breach ? ' ⚠' : '') + '</span>'
+              + '<span style="color:var(--muted)">dispara em ' + (x.triggerPx ? 'R$' + x.triggerPx.toFixed(2) : '—') + '</span>'
+              + '</div>';
+          }).join('');
+          var netCor = tr.netBreach ? 'var(--red)' : 'var(--green)';
+          return '<div style="background:var(--bg);border-radius:6px;padding:10px;margin-bottom:10px">'
+            + '<div style="font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">'
+            + 'Gatilhos · limite ' + (tr.trigger*100).toFixed(0) + 'Δ por perna (' + tr.dte + ' DU)</div>'
+            + rows
+            + '<div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;padding:5px 0 0;margin-top:5px;border-top:1px solid var(--border);color:var(--muted)">'
+            + '<span>Contribuição desta estrutura</span><span>' + (tr.netDelta>=0?'+':'') + tr.netDelta.toFixed(0) + ' cotas-Δ</span>'
+            + '</div>'
+            + '<div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;padding:3px 0 0">'
+            + '<span style="color:var(--muted)">Delta líquido da carteira (Nível B)</span>'
+            + '<span style="color:' + netCor + ';font-weight:700">R$' + tr.portfolioDeltaReais.toFixed(0) + ' / R$' + tr.budget.toFixed(0) + (tr.netBreach ? ' ⚠' : '') + '</span>'
+            + '</div>'
+            + '</div>';
+        })(roll.tr) : '')
+      + '<div style="background:' + roll.color.replace(')',',0.10)').replace('var','rgba').replace('(--','(') + ';border:1px solid ' + roll.color + ';border-radius:6px;padding:10px">'
+      + '<div style="font-family:var(--mono);font-size:11px;font-weight:700;color:' + roll.color + ';margin-bottom:3px">' + roll.label + '</div>'
+      + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.4">' + roll.desc + '</div>'
+      + (roll.sug ? renderSugestaoRecentragem(roll.sug) : '')
+      + '</div>'
+      + '</div>';
+  });
+  return html;
+}
+function renderRadarEncerrar() {
+  if (!curPositions.length) return '<div class="empty">Nenhuma posicao aberta.</div>';
+  var spot = spotData.close || 168;
+  var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
+  curPositions.forEach(function(pos) {
+    var legs = (pos.details && pos.details.legs) || [];
+    if (!legs.length) return;
+    var m = calcMetrics(pos);
+    var pnlNow = calcPayoffNow(legs);
+    var pct = m.creditoTotal > 0 ? (pnlNow / m.creditoTotal * 100) : 0;
+    var dte = pos['days-to-maturity'] || 0;
+    var bes = findBreakevens(legs);
+    var nearestDist = 100;
+    bes.forEach(function(be){ var d=Math.abs(be-spot)/spot*100; if(d<nearestDist) nearestDist=d; });
+    var tr = checkRollTriggers(pos);
+    var mainColor, mainLabel, mainDesc;
+    var signals = [];
+    if (tr.regra10) {
+      mainColor = 'var(--red)'; mainLabel = 'Rolar pra fora ou encerrar';
+      mainDesc = 'Perna acima de 30Δ com menos de 10 DU — sem terceira opcao';
+      signals.push({ c:'var(--red)', t:'Perna testada em ' + (tr.testada?(tr.testada.absDelta*100).toFixed(0):'—') + 'Δ' });
+      signals.push({ c:'var(--red)', t:'DTE: ' + dte + 'du — gamma domina' });
+    } else if (dte <= 5 && nearestDist < 2) {
+      mainColor = 'var(--red)'; mainLabel = 'Encerrar';
+      mainDesc = 'DTE critico e spot junto do breakeven — realizar e sair';
+      signals.push({ c:'var(--red)', t:'DTE: ' + dte + 'du — muito pouco tempo' });
+      signals.push({ c:'var(--red)', t:'BE a apenas ' + nearestDist.toFixed(1) + '% do spot' });
+    } else if (pct >= 50 && dte <= 10) {
+      mainColor = 'var(--green)'; mainLabel = 'Encerrar';
+      mainDesc = '50%+ capturado com DTE baixo — realizar o lucro';
+      signals.push({ c:'var(--green)', t:pct.toFixed(0) + '% do credito capturado' });
+      signals.push({ c:'var(--yellow)', t:'Apenas ' + dte + 'du restantes' });
+    } else if (tr.netBreach) {
+      mainColor = 'var(--yellow)'; mainLabel = 'Recentrar';
+      mainDesc = 'Delta liquido da carteira acima do orcamento — e concentracao, nao motivo pra encerrar. Aproximar a perna vencedora gera credito';
+      signals.push({ c:'var(--yellow)', t:'Carteira: R$' + tr.portfolioDeltaReais.toFixed(0) + ' / R$' + tr.budget.toFixed(0) });
+      signals.push({ c:'var(--muted)', t:'Capturado: ' + pct.toFixed(0) + '%' });
+    } else if (nearestDist < 3) {
+      mainColor = 'var(--red)'; mainLabel = 'Afastar strike';
+      mainDesc = 'Spot junto do breakeven — rolar no tempo afastando o strike, ou sair';
+      signals.push({ c:'var(--red)', t:'BE a ' + nearestDist.toFixed(1) + '% — zona de perigo' });
+    } else if (dte <= 7) {
+      mainColor = 'var(--yellow)'; mainLabel = 'Rolar pra fora ou encerrar';
+      mainDesc = 'DTE baixo — janela de decisao, sem meio-termo';
+      signals.push({ c:'var(--yellow)', t:dte + 'du — janela de decisao' });
+      signals.push({ c:pct>=50?'var(--green)':'var(--muted)', t:pct.toFixed(0) + '% capturado ate agora' });
+    } else if (pct >= 50) {
+      mainColor = 'var(--green)'; mainLabel = 'Encerrar e opcional';
+      mainDesc = '50%+ capturado — pode realizar, posicao ainda segura';
+      signals.push({ c:'var(--green)', t:pct.toFixed(0) + '% do credito capturado' });
+      signals.push({ c:'var(--muted)', t:dte + 'du ainda restando' });
+    } else {
+      mainColor = 'var(--muted)'; mainLabel = 'Aguardar';
+      mainDesc = 'Delta liquido dentro do orcamento — deixar o tempo trabalhar';
+      signals.push({ c:'var(--muted)', t:'DTE: ' + dte + 'du' });
+      signals.push({ c:pct>=0?'var(--accent)':'var(--red)', t:'Capturado: ' + pct.toFixed(0) + '%' });
+      signals.push({ c:'var(--green)', t:'Dist. BE: ' + nearestDist.toFixed(1) + '%' });
+    }
+    var pctCl = Math.min(100, Math.max(0, pct));
+    html += '<div style="background:var(--surface2);border-radius:8px;padding:14px;border-left:3px solid ' + mainColor + '">'
+      + '<div style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent);margin-bottom:8px">' + (pos.name||'Posicao') + '</div>'
+      + '<div style="font-family:var(--mono);font-size:20px;font-weight:700;color:' + mainColor + ';margin-bottom:4px">' + mainLabel + '</div>'
+      + '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.5;margin-bottom:12px">' + mainDesc + '</div>'
+      + signals.map(function(s){ return '<div style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:' + s.c + ';margin-bottom:5px"><span style="width:5px;height:5px;border-radius:50%;background:' + s.c + ';flex-shrink:0"></span>' + s.t + '</div>'; }).join('')
+      + '<div style="background:var(--bg);border-radius:3px;height:5px;margin:10px 0;overflow:hidden">'
+      + '<div style="width:' + pctCl + '%;height:100%;background:' + (pct>=50?'var(--green)':pct>=25?'var(--accent)':'var(--muted)') + ';border-radius:3px"></div>'
+      + '</div>'
+      + '<div style="font-family:var(--mono);font-size:11px;font-weight:600;color:' + (pnlNow>=0?'var(--green)':'var(--red)') + '">'
+      + (pnlNow>=0?'+':'') + 'R$ ' + pnlNow.toFixed(2)
+      + ' <span style="color:var(--muted);font-weight:400;font-size:10px">(' + pct.toFixed(0) + '% de R$' + m.creditoTotal.toFixed(0) + ')</span></div>'
+      + '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+// ─── SNAPSHOT ────────────────────────────────────────────────────────────────
+function buildSnap() {
+  var spot = spotData.close || 0;
+  var vp   = spotData.variation || 0;
+  var expiry = document.getElementById('esel').value;
+  var now = new Date().toLocaleString('pt-BR');
+  var s = '=== SNAPSHOT OPLAB · ' + now + ' ===\n\n';
+  s += 'BOVA11 SPOT\n';
+  s += '  Preço: R$ ' + spot.toFixed(2) + ' | Var: ' + (vp>=0?'+':'') + vp.toFixed(2) + '%\n';
+  s += '  Máx: R$ ' + (spotData.high||0).toFixed(2) + ' | Mín: R$ ' + (spotData.low||0).toFixed(2) + ' | Vol: ' + fmtVol(spotData.financial_volume||0) + '\n';
+  if (seriesInfo.iv_current) {
+    s += '  IV Spot: ' + normIvPct(seriesInfo.iv_current).toFixed(1) + '%\n';
+  }
+  var zoneSnap = getVxbrZone(radarData.vxbr || normIvPct(radarData.ivCur));
+  s += '  VXBR: ' + ((radarData.vxbr||0) > 0 ? radarData.vxbr.toFixed(2) : 'N/D')
+     + ' | Zona: ' + zoneSnap.label + ' | Mao: ' + zoneSnap.sizeLabel + '\n';
+  s += '  Orcamento de exposicao direcional (Nivel B, carteira toda): R$' + getDeltaBudgetReais().toFixed(0) + ' (capital R$' + CAPITAL.toFixed(0) + ' x 10%)\n';
+  s += '\n';
+  if (curOptions.length) {
+    var atm = curOptions.filter(function(o){ return spot && Math.abs(o.strike-spot)/spot < 0.04; }).sort(function(a,b){ return a.strike-b.strike; });
+    s += 'OPÇÕES ATM/PRÓXIMAS (venc. ' + fmtDate(expiry) + ')\n';
+    atm.forEach(function(o) {
+      var iv = ((o.implied_volatility||(o.greeks&&o.greeks.iv)||0)*100);
+      var delta = o.delta||(o.greeks&&o.greeks.delta)||0;
+      var theta = o.theta||(o.greeks&&o.greeks.theta)||0;
+      s += '  ' + o.symbol + ' ' + o.category + ' K' + o.strike.toFixed(2)
+        + ' | Ult:' + (o.close||0).toFixed(2)
+        + ' Bid:' + (o.bid||0).toFixed(2)
+        + ' Ask:' + (o.ask||0).toFixed(2)
+        + ' Δ:' + (delta?delta.toFixed(3):'—')
+        + ' Θ:' + (theta?theta.toFixed(3):'—')
+        + ' IV:' + (iv?iv.toFixed(1)+'%':'—') + '\n';
+    });
+    s += '\n';
+  }
+  if (curPositions.length) {
+    s += 'POSIÇÕES ABERTAS\n';
+    var tPnl = 0;
+    curPositions.forEach(function(pos) {
+      s += '  [' + (pos.name||pos.id) + '] ' + (pos['spot-symbol']||'') + ' · ' + (pos['days-to-maturity']||0) + 'du\n';
+      var legs = (pos.details && pos.details.legs) || [];
+      legs.forEach(function(leg) {
+        var pnl = calcPayoffNow([leg]);
+        tPnl += pnl;
+        s += '    ' + (leg.symbol||'?') + ' ' + (leg['instrument-type']||'') + ' K' + (leg.strike||0)
+          + ' ' + fmtDate(leg['due-date'])
+          + ' | ' + (leg.type||'SELL') + ' ' + (leg.amount||0)
+          + ' Ent:' + (leg['price-in']||0).toFixed(2)
+          + ' Ult:' + (leg.close||0).toFixed(2)
+          + ' Bid:' + (leg.bid||0).toFixed(2)
+          + ' Ask:' + (leg.ask||0).toFixed(2)
+          + ' P&L:' + (pnl>=0?'+':'') + 'R$' + pnl.toFixed(2) + '\n';
+      });
+      var pg = calcPositionGreeks(legs);
+      if (pg.found > 0) s += '  Gregas: Δ' + pg.delta.toFixed(0) + ' Θ' + pg.theta.toFixed(0) + '/d Γ' + pg.gamma.toFixed(0) + ' ν' + pg.vega.toFixed(0) + '\n';
+      // V1.8 — gatilhos e precos-gatilho por perna
+      var trSnap = checkRollTriggers(pos);
+      s += '  Gatilho: limite ' + (trSnap.trigger*100).toFixed(0) + 'D por perna (' + trSnap.dte + ' DU)\n';
+      trSnap.legs.forEach(function(x) {
+        s += '    ' + x.tipo + ' K' + x.strike.toFixed(0) + ': ' + (x.absDelta*100).toFixed(0) + 'D'
+          + (x.breach ? ' [GATILHO]' : '')
+          + ' | dispara em R$' + (x.triggerPx ? x.triggerPx.toFixed(2) : '—') + '\n';
+      });
+      s += '  Contribuicao desta estrutura: ' + trSnap.netDelta.toFixed(0) + ' cotas-delta\n';
+      s += '  Delta liquido da CARTEIRA (Nivel B): R$' + trSnap.portfolioDeltaReais.toFixed(0) + ' / orcamento R$' + trSnap.budget.toFixed(0)
+        + (trSnap.netBreach ? ' [NIVEL B ESTOURADO]' : '') + '\n';
+      var mSnap = calcMetrics(pos);
+      var pctSnap = mSnap.creditoTotal > 0 ? (calcPayoffNow(legs) / mSnap.creditoTotal * 100) : 0;
+      var rollSnap = getRolloverStage(legs, pctSnap, pos['days-to-maturity']||0, pos);
+      s += '  Radar: ' + rollSnap.label + ' — ' + rollSnap.desc + '\n';
+      if (rollSnap.sug) {
+        var sS = rollSnap.sug;
+        s += '  Sugestao: fechar ' + sS.tipo + ' K' + sS.strikeAtual.toFixed(2)
+          + ' -> abrir ' + (sS.novoSymbol || ('K'+sS.novoStrike.toFixed(2)+' teorico')) + ' (Δ' + (sS.novoDelta*100).toFixed(0) + ')'
+          + ' | ' + (sS.netTotal>=0?'credito':'debito') + ' R$' + Math.abs(sS.netTotal).toFixed(2)
+          + (sS.real ? '' : ' [estimado]') + '\n';
+      }
+    });
+    s += '  ────\n';
+    s += '  P&L TOTAL: ' + (tPnl>=0?'+':'') + 'R$ ' + tPnl.toFixed(2) + '\n';
+  } else {
+    s += 'POSIÇÕES: Nenhuma encontrada.\n';
+  }
+  if (spot && seriesInfo.series) {
+    if (viesData && viesData.semaforo) {
+      s += '\nVIÉS DIRECIONAL: ' + viesData.semaforo + ' (score ' + (viesData.scorePct*100).toFixed(0) + '%)\n';
+      var closesSnap = viesData.map(function(c){ return c.close; });
+      var mm20s = sma(closesSnap, 20), mm50s = sma(closesSnap, 50), rsis = calcRSI(closesSnap, 14);
+      s += '  MM20 R$' + (mm20s?mm20s.toFixed(2):'—') + ' · MM50 R$' + (mm50s?mm50s.toFixed(2):'—') + ' · RSI ' + (rsis?rsis.toFixed(0):'—') + '\n';
+    }
+    var mensaisSnap = seriesInfo.series
+      .filter(function(x){ return isMonthlyExpiry(x.due_date) && x.days_to_maturity >= 10; })
+      .slice(0, 3);
+    if (mensaisSnap.length) {
+      function gd(o){ return o.bs ? (o.bs.delta||0) : 0; }
+      function gmid(o){ var b=o.bid||0,a=o.ask||0; return (b>0&&a>0)?(b+a)/2:(o.close||0); }
+      function vopt(o){ return o&&o.symbol&&(o.bid>0)&&o.bs&&Math.abs(o.bs.delta||0)>=0.05&&Math.abs(o.bs.delta||0)<=0.95; }
+      function fbd(list,t){ if(!list.length)return null; return list.slice().sort(function(a,b){return Math.abs(Math.abs(gd(a))-t)-Math.abs(Math.abs(gd(b))-t);})[0]; }
+      s += '\nRADAR DE OPORTUNIDADES — VOLATILIDADE:\n';
+      mensaisSnap.forEach(function(serie) {
+        var calls=[],puts=[];
+        (serie.strikes||[]).forEach(function(sk){
+          if(vopt(sk.call)&&sk.strike>=spot*0.8&&sk.strike<=spot*1.2) calls.push(Object.assign({},sk.call,{strike:sk.strike}));
+          if(vopt(sk.put)&&sk.strike>=spot*0.8&&sk.strike<=spot*1.2) puts.push(Object.assign({},sk.put,{strike:sk.strike}));
+        });
+        if(!calls.length||!puts.length) return;
+        var cO=calls.filter(function(o){return o.strike>spot;}), pO=puts.filter(function(o){return o.strike<spot;});
+        var sC=fbd(calls,0.50), sP=fbd(puts,0.50);
+        if(sC&&sP){
+          var cr=gmid(sC)+gmid(sP);
+          s += '  STRADDLE ' + fmtDate(serie.due_date) + ' (' + serie.days_to_maturity + 'du): '
+            + 'C ' + sC.symbol + ' K' + sC.strike.toFixed(0) + ' / P ' + sP.symbol + ' K' + sP.strike.toFixed(0)
+            + ' | Créd R$' + cr.toFixed(2) + ' | BE R$' + (sC.strike-cr).toFixed(2) + '-R$' + (sC.strike+cr).toFixed(2) + '\n';
+        }
+        [0.15,0.22,0.30].forEach(function(d){
+          var gC=fbd(cO.length?cO:calls,d), gP=fbd(pO.length?pO:puts,d);
+          if(gC&&gP&&gC.strike!==gP.strike){
+            var cr2=gmid(gC)+gmid(gP);
+            s += '  STRANGLE Δ' + (d*100).toFixed(0) + ' ' + fmtDate(serie.due_date) + ' (' + serie.days_to_maturity + 'du): '
+              + 'C ' + gC.symbol + ' K' + gC.strike.toFixed(0) + ' Δ' + gd(gC).toFixed(2) + ' / P ' + gP.symbol + ' K' + gP.strike.toFixed(0) + ' Δ' + gd(gP).toFixed(2)
+              + ' | Créd R$' + cr2.toFixed(2) + ' | BE R$' + (gP.strike-cr2).toFixed(2) + '-R$' + (gC.strike+cr2).toFixed(2) + '\n';
+          }
+        });
+      });
+      s += '\nRADAR DE OPORTUNIDADES — DIRECIONAIS:\n';
+      s += '  >> VENDA DE PUT (viés ALTA — lucra acima do strike):\n';
+      mensaisSnap.forEach(function(serie) {
+        var puts=[];
+        (serie.strikes||[]).forEach(function(sk){
+          if(vopt(sk.put)&&sk.strike>=spot*0.8&&sk.strike<=spot*1.2) puts.push(Object.assign({},sk.put,{strike:sk.strike}));
+        });
+        if(!puts.length) return;
+        var pO=puts.filter(function(o){return o.strike<spot;});
+        var dte=serie.days_to_maturity;
+        [0.15,0.20,0.30].forEach(function(d){
+          var p=fbd(pO.length?pO:puts,d);
+          if(p){ var crP=gmid(p); var risco=p.strike-crP; var retP=risco>0?(crP/risco)*(252/dte)*100:0;
+            s += '    Δ' + (d*100).toFixed(0) + ' ' + fmtDate(serie.due_date) + ' (' + dte + 'du): '
+              + p.symbol + ' K' + p.strike.toFixed(0) + ' Δ' + gd(p).toFixed(2) + ' | Créd R$' + crP.toFixed(2)
+              + ' | POP ' + ((1-Math.abs(gd(p)))*100).toFixed(0) + '% | Ret.aa ' + retP.toFixed(1) + '% | BE R$' + (p.strike-crP).toFixed(2) + '\n';
+          }
+        });
+      });
+      s += '  >> VENDA DE CALL (viés BAIXA — lucra abaixo do strike):\n';
+      mensaisSnap.forEach(function(serie) {
+        var calls=[];
+        (serie.strikes||[]).forEach(function(sk){
+          if(vopt(sk.call)&&sk.strike>=spot*0.8&&sk.strike<=spot*1.2) calls.push(Object.assign({},sk.call,{strike:sk.strike}));
+        });
+        if(!calls.length) return;
+        var cO=calls.filter(function(o){return o.strike>spot;});
+        var dte=serie.days_to_maturity;
+        [0.15,0.20,0.30].forEach(function(d){
+          var c=fbd(cO.length?cO:calls,d);
+          if(c){ var crC=gmid(c); var retC=(crC/(c.strike-crC))*(252/dte)*100;
+            s += '    Δ' + (d*100).toFixed(0) + ' ' + fmtDate(serie.due_date) + ' (' + dte + 'du): '
+              + c.symbol + ' K' + c.strike.toFixed(0) + ' Δ' + gd(c).toFixed(2) + ' | Créd R$' + crC.toFixed(2)
+              + ' | POP ' + ((1-Math.abs(gd(c)))*100).toFixed(0) + '% | Ret.aa ' + retC.toFixed(1) + '% | BE R$' + (c.strike+crC).toFixed(2) + '\n';
+          }
+        });
+      });
+    }
+  }
+  document.getElementById('snapout').textContent = s;
+}
+function copySnap() {
+  var txt = document.getElementById('snapout').textContent;
+  navigator.clipboard.writeText(txt).then(function() {
+    var b = document.querySelector('.cpbtn');
+    b.textContent = '✓ Copiado!';
+    setTimeout(function(){ b.innerHTML = '📋 Copiar Snapshot'; }, 2000);
+  });
+}
+// ─── CHAT CLAUDE ─────────────────────────────────────────────────────────────
+function buildChatContext() {
+  var spot = spotData.close || 0;
+  var vxbr = radarData.vxbr || 0;
+  var ivRank = radarData.ivRank || 0;
+  var ivCur  = normIvPct(radarData.ivCur);
+  var hvCur  = normIvPct(radarData.hvCur);
+  var expiry = document.getElementById('esel') ? document.getElementById('esel').value : '';
+  var zoneRef = vxbr || ivCur;
+  var zone = getVxbrZone(zoneRef);
+  var ctx = '=== SNAPSHOT ' + new Date().toLocaleString('pt-BR') + ' ===\n\n';
+  ctx += 'BOVA11: R$' + spot.toFixed(2) + ' (' + (spotData.variation||0).toFixed(2) + '%) | Max:R$' + (spotData.high||0).toFixed(2) + ' Min:R$' + (spotData.low||0).toFixed(2) + '\n';
+  ctx += 'VXBR: ' + (vxbr > 0 ? vxbr.toFixed(2) : 'N/D');
+  ctx += ' | IV BOVA11: ' + ivCur.toFixed(2) + '% | HV (EWMA): ' + hvCur.toFixed(2) + '% | IV Rank: ' + ivRank.toFixed(1) + '\n';
+  ctx += 'Zona: ' + zone.label + ' | Mao: ' + zone.sizeLabel + '\n';
+  ctx += 'Capital: R$' + CAPITAL.toFixed(0) + ' | Orcamento de exposicao direcional (Nivel B, carteira toda): R$' + getDeltaBudgetReais().toFixed(0) + '\n\n';
+  if (curPositions.length) {
+    ctx += 'POSICOES ABERTAS:\n';
+    curPositions.forEach(function(pos) {
+      var legs = (pos.details && pos.details.legs) || [];
+      if (!legs.length) return;
+      var m = calcMetrics(pos);
+      var pnlNow = calcPayoffNow(legs);
+      var pct = m.creditoTotal > 0 ? (pnlNow / m.creditoTotal * 100) : 0;
+      var dte = pos['days-to-maturity'] || 0;
+      var bes = findBreakevens(legs);
+      var roll = getRolloverStage(legs, pct, dte, pos);
+      var tr = roll.tr || checkRollTriggers(pos);
+      ctx += '\n[' + (pos.name||'pos') + '] ' + (pos['spot-symbol']||'BOVA11') + ' | ' + dte + 'du | venc ' + fmtDate(pos['due-date']) + '\n';
+      ctx += '  Credito recebido: R$' + m.creditoTotal.toFixed(2) + '\n';
+      ctx += '  P&L atual: ' + (pnlNow>=0?'+':'') + 'R$' + pnlNow.toFixed(2) + ' (' + pct.toFixed(1) + '% do credito capturado)\n';
+      ctx += '  Projetado para hoje (custo fechar): R$' + m.projetadoHoje.toFixed(2) + '\n';
+      if (bes.length) ctx += '  Breakevens no venc.: ' + bes.map(function(b){ return 'R$'+b.toFixed(2)+' (dist '+(Math.abs(b-spot)/spot*100).toFixed(1)+'%)'; }).join(' / ') + '\n';
+      ctx += '  GATILHO: limite ' + (tr.trigger*100).toFixed(0) + 'D por perna neste DTE\n';
+      tr.legs.forEach(function(x) {
+        ctx += '    ' + x.tipo + ' K' + x.strike.toFixed(0) + ': ' + (x.absDelta*100).toFixed(0) + 'D'
+          + (x.breach ? ' [NIVEL A DISPAROU]' : '')
+          + ' | dispara em R$' + (x.triggerPx ? x.triggerPx.toFixed(2) : '—') + '\n';
+      });
+      ctx += '  Contribuicao desta estrutura: ' + tr.netDelta.toFixed(0) + ' cotas-delta\n';
+      ctx += '  Delta liquido da CARTEIRA (Nivel B): R$' + tr.portfolioDeltaReais.toFixed(0) + ' / orcamento R$' + tr.budget.toFixed(0)
+        + (tr.netBreach ? ' [NIVEL B DISPAROU]' : '') + '\n';
+      if (tr.regra10) ctx += '  [REGRA 10 DU ATIVA] perna acima de 30D com menos de 10 DU\n';
+      ctx += '  Radar: ' + roll.label + ' — ' + roll.desc + '\n';
+      if (roll.sug) {
+        var s = roll.sug;
+        ctx += '  Sugestao de recentragem: fechar ' + s.tipo + ' K' + s.strikeAtual.toFixed(2)
+          + ' -> abrir ' + (s.novoSymbol || ('K'+s.novoStrike.toFixed(2)+' teorico')) + ' (delta ' + (s.novoDelta*100).toFixed(0) + ')'
+          + ' | fechar R$' + s.custoFechar.toFixed(2) + ' abrir R$' + s.creditoAbrir.toFixed(2) + ' x' + s.qty
+          + ' = ' + (s.netTotal>=0?'credito':'debito') + ' R$' + Math.abs(s.netTotal).toFixed(2)
+          + (s.real ? '' : ' [estimado, sem cotacao real nessa faixa]') + '\n';
+      }
+      ctx += '  Legs:\n';
+      legs.forEach(function(leg) {
+        ctx += '    ' + (leg.type||'SELL') + ' ' + (leg.amount||0) + 'x ' + (leg.symbol||'') + ' ' + (leg['instrument-type']||'') + ' K' + (leg.strike||0) + ' ' + fmtDate(leg['due-date']) + ' ' + (leg['days-to-maturity']||0) + 'du';
+        ctx += ' | ent:' + (leg['price-in']||0).toFixed(2) + ' ult:' + (leg.close||0).toFixed(2) + ' bid:' + (leg.bid||0).toFixed(2) + ' ask:' + (leg.ask||0).toFixed(2) + '\n';
+      });
+    });
+  } else {
+    ctx += 'POSICOES: Nenhuma posicao aberta.\n';
+  }
+  if (curOptions.length) {
+    var atm = curOptions.filter(function(o){ return spot && Math.abs(o.strike-spot)/spot < 0.05; }).sort(function(a,b){ return a.strike-b.strike; });
+    if (atm.length) {
+      ctx += '\nOPCOES ATM (' + fmtDate(expiry) + '):\n';
+      atm.forEach(function(o) {
+        var iv = (o.implied_volatility || (o.greeks&&o.greeks.iv) || 0) * 100;
+        var delta = o.delta || (o.greeks&&o.greeks.delta) || 0;
+        var theta = o.theta || (o.greeks&&o.greeks.theta) || 0;
+        ctx += '  ' + (o.symbol||'') + ' ' + (o.category||'') + ' K' + (o.strike||0) + ' | bid:' + (o.bid||0).toFixed(2) + ' ask:' + (o.ask||0).toFixed(2) + ' delta:' + (delta?delta.toFixed(3):'—') + ' theta:' + (theta?theta.toFixed(3):'—') + ' IV:' + iv.toFixed(1) + '%\n';
+      });
+    }
+  }
+  return ctx;
+}
+async function sendChat() {
+  var apiKey = (document.getElementById('claude-api-key').value || '').trim();
+  var input  = document.getElementById('chat-input');
+  var btn    = document.getElementById('chat-send-btn');
+  var question = (input.value || '').trim();
+  if (!apiKey) { addChatMessage('sistema', 'Cole sua Anthropic API Key acima para usar o chat. Obtenha em console.anthropic.com'); return; }
+  if (!question) return;
+  lsSet(LS_KEYS.apiKey, apiKey);
+  input.value = '';
+  btn.disabled = true;
+  addChatMessage('user', question);
+  addChatMessage('loading', '');
+  var ctx = buildChatContext();
+  var systemPrompt = 'Voce e um assistente especializado em venda de volatilidade com opcoes de BOVA11. '
+    + 'Nao da recomendacao de investimento: aplica o framework do trader com os numeros do snapshot. '
+    + 'SIZING: max puts = Capital / Strike, fatiado em 3 entradas delta 20/25. '
+    + 'ZONAS VXBR: <15.13 evitar (vega negativo); 15.13-16.89 posicoes pequenas ~20%; 16.89-22.17 ate 2/3; >22.17 agressividade autorizada. '
+    + 'GATILHO DE ROLAGEM — checar SEMPRE os dois niveis: '
+    + 'Nivel A, por perna: limite de delta dirigido por DTE — 48 delta acima de 30 DU, 42 entre 15 e 30 DU, 35 entre 10 e 15 DU, 28 abaixo de 10 DU; '
+    + 'subtrair 4 pontos de delta se VXBR > 22.17 (risco de gap). '
+    + 'Nivel B, carteira inteira, medido em REAIS (nao em cotas): soma o delta liquido de TODAS as estruturas abertas em BOVA11 '
+    + '(nao so a que esta sendo discutida), multiplica pelo spot atual, e compara contra o orcamento fixo = Capital x 10%. '
+    + 'Medir em R$ evita ter que escolher "qual strike" quando ha varias estruturas em strikes diferentes — cotas de strikes diferentes nao sao fungiveis, reais sao. '
+    + 'O Nivel B pode disparar mesmo sem nenhuma perna individual no gatilho — '
+    + 'isso e concentracao (historicamente puts), e o erro mais caro do trader. Nunca omita essa checagem, e sempre trate como exposicao da CARTEIRA, nunca de uma estrutura isolada. '
+    + 'REGRA DOS 10 DU: nenhuma perna acima de 30 delta atravessa 10 DU. Abaixo disso a decisao e binaria: encerrar ou rolar pra fora. Nao existe observar mais um pouco. '
+    + 'MOVIMENTOS (nesta ordem, so desce se o anterior nao trouxer o delta liquido de volta ao orcamento): '
+    + '1) RECENTRAR = aproximar o strike da perna que esta ganhando. Entra credito, reduz delta liquido, '
+    + 'nao aumenta o risco do lado testado. E o unico movimento que paga o trader para reduzir delta — avalie sempre primeiro; '
+    + '2) AFASTAR STRIKE = rolar no tempo afastando o strike, com credito liquido nao negativo. '
+    + 'Se so sai com debito, o preco ja correu. Destino da maioria dos gatilhos; '
+    + '3) ENCERRAR = realizar a perda e sair, quando nem recentrar nem afastar resolve. '
+    + 'Abaixo de 10 DU a lista encurta: rolar pra fora ou encerrar, sem terceira opcao. '
+    + 'NAO existe mais "Rolagem 1/2/3" numerada. Rolar mantendo o mesmo strike foi absorvido em AFASTAR, '
+    + 'porque o gatilho dispara em 42-48 delta e rolar sem mudar strike nao traz esse delta de volta — paga dois spreads e continua fora. '
+    + 'Aumentar quantidade nao e um degrau: e excecao com 5 condicoes (VXBR calmo/normal, dentro do orcamento da tranche, '
+    + 'credito novo >= 60% do debito acumulado, maximo uma vez por estrutura, sem evento macro no novo vencimento). '
+    + 'Cinco condicoes juntas quase nunca passam. Trate como ENCERRAR; se todas realmente passarem, e decisao separada, nunca o passo automatico depois de afastar. '
+    + 'STOP: nova rolagem no mesmo vencimento = estopa a operacao. '
+    + 'MANTER: rolar pro proximo vencimento 0x0 ou recebendo, com IV alta. '
+    + 'BLOQUEIO DE EVENTO: se o novo vencimento contem COPOM ou data do calendario eleitoral 2026 e VXBR > 22.17, role com quantidade REDUZIDA. '
+    + 'Overlay sazonal ago-out: trate como um nivel acima de severidade. '
+    + 'Ao responder sobre rolagem, sempre informe: qual nivel disparou com os numeros, qual movimento recomenda e por que os anteriores nao resolvem, '
+    + 'e uma linha de log no formato: data | DTE | VXBR | delta da perna | delta liquido antes>depois | movimento | credito ou debito | resultado. '
+    + 'Responda direto em portugues brasileiro, curto, com os numeros reais do snapshot.';
+  try {
+    var res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-allow-browser': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: 'DADOS ATUAIS DO DASHBOARD:\n' + ctx + '\nPERGUNTA DO TRADER: ' + question }]
+      })
+    });
+    var data = await res.json();
+    removeChatLoading();
+    if (!res.ok) {
+      var errMsg = (data.error && data.error.message) || ('Erro HTTP ' + res.status);
+      addChatMessage('error', errMsg);
+    } else {
+      var text = (data.content && data.content[0] && data.content[0].text) || '';
+      addChatMessage('claude', text);
+    }
+  } catch(e) {
+    removeChatLoading();
+    addChatMessage('error', 'Erro de conexao: ' + e.message);
+  }
+  btn.disabled = false;
+}
+function addChatMessage(role, text) {
+  var container = document.getElementById('chat-messages');
+  if (!container) return;
+  var div = document.createElement('div');
+  div.className = 'chat-msg chat-' + role;
+  if (role === 'loading') {
+    div.id = 'chat-loading';
+    div.innerHTML = '<div class="chat-text chat-loading"><div class="chat-dots"><span></span><span></span><span></span></div></div>';
+  } else {
+    var labels = { user:'Voce', claude:'Claude', error:'Erro', sistema:'Aviso' };
+    div.innerHTML = '<div class="chat-role">' + (labels[role]||role) + '</div><div class="chat-text">' + chatMarkdown(text) + '</div>';
+  }
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+function removeChatLoading() {
+  var el = document.getElementById('chat-loading');
+  if (el) el.remove();
+}
+function chatMarkdown(text) {
+  return text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g,'<em>$1</em>')
+    .replace(/`([^`]+)`/g,'<code style="background:var(--surface);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:11px">$1</code>')
+    .replace(/^### (.*$)/gm,'<div style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent);margin:8px 0 4px">$1</div>')
+    .replace(/^## (.*$)/gm,'<div style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent);margin:10px 0 4px">$1</div>')
+    .replace(/^- (.*$)/gm,'<div style="display:flex;gap:6px;margin:2px 0"><span style="color:var(--accent)">·</span><span>$1</span></div>')
+    .replace(/\n/g,'<br>');
+}
+function fmtVol(v) {
+  if (v>=1e9) return (v/1e9).toFixed(1)+'B';
+  if (v>=1e6) return (v/1e6).toFixed(1)+'M';
+  if (v>=1e3) return (v/1e3).toFixed(1)+'K';
+  return String(v);
+}
+function fmtDate(d) {
+  if (!d || d==='—') return '—';
+  try {
+    var dt = new Date(d.includes('T') ? d : d+'T12:00:00');
+    return dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'2-digit'});
+  } catch(e) { return d; }
+}
+(function init() {
+  function applyVersion() {
+    var vLogin = document.getElementById('app-version-login');
+    var vHeader = document.getElementById('app-version-header');
+    if (vLogin)  vLogin.textContent  = APP_VERSION;
+    if (vHeader) vHeader.textContent = APP_VERSION;
+
+    // Restaurar Capital
+    var savedCapital = parseFloat(lsGet(LS_KEYS.capital, ''));
+    if (savedCapital > 0) CAPITAL = savedCapital;
+    var capInput = document.getElementById('capital-input');
+    if (capInput) capInput.value = CAPITAL;
+
+    // Restaurar VXBR
+    var savedVxbr = parseFloat(lsGet(LS_KEYS.vxbr, ''));
+    var vxbrInput = document.getElementById('vxbr-input');
+    if (vxbrInput && savedVxbr > 0) {
+      vxbrInput.value = savedVxbr;
+      radarData.vxbr = savedVxbr;
+      var zona = document.getElementById('vxbr-zona');
+      if (zona) {
+        var z = getVxbrZone(savedVxbr);
+        zona.textContent = z.label;
+        zona.style.color = z.color;
+      }
+    }
+
+    // Restaurar API Key
+    var savedKey = lsGet(LS_KEYS.apiKey, '');
+    var keyInput = document.getElementById('claude-api-key');
+    if (keyInput && savedKey) keyInput.value = savedKey;
+
+    var tokenInput = document.getElementById('inp-token');
+    if (tokenInput) tokenInput.focus();
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyVersion);
+  } else {
+    applyVersion();
+  }
+})();
+</script>
+</body>
+</html>
