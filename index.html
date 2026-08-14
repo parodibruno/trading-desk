@@ -238,10 +238,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     </div>
     <div id="payoff-details" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"></div>
   </div>
-  <div class="card">
-    <div class="ctitle">Recomendações Consolidadas · Posições Abertas</div>
-    <div id="recomendacoes-box"><div class="loading"><div class="spinner"></div>Carregando...</div></div>
-  </div>
   <div class="card" id="radar-card">
     <div class="ctitle">Radar de Decisão · 3 Perspectivas</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:12px" id="radar-box">
@@ -334,7 +330,7 @@ function lsGet(k, def) { try { var v = localStorage.getItem(k); return v === nul
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 
 var API = 'https://api.oplab.com.br/v3';
-var APP_VERSION = 'v3.1 · Persistência de Capital, VXBR e API Key';
+var APP_VERSION = 'v3.3 · Decisão única (6 gatilhos) + VXBR automático';
 var tok = '';
 var spotData = {};
 var radarData = {};
@@ -396,16 +392,27 @@ function calcPortfolioNetDeltaReais() {
   return { deltaCotas: g.delta, deltaReais: g.delta * spot, spot: spot };
 }
 
+// V3.2 — CAPITAL_CONFIRMADO distingue "usuario digitou/restaurou" de "default do
+// codigo". O default de 100k gerava Nivel B estourado falso (orcamento 10x menor
+// que o real) sem nenhum aviso de que o numero nao era o do usuario.
+var CAPITAL_CONFIRMADO = false;
 function onCapitalInput(val) {
   var v = parseFloat(val) || 0;
-  if (v > 0) CAPITAL = v;
-  lsSet(LS_KEYS.capital, String(v));
+  if (v > 0) { CAPITAL = v; CAPITAL_CONFIRMADO = true; lsSet(LS_KEYS.capital, String(v)); }
   var lbl = document.getElementById('delta-budget-label');
   if (lbl) {
     var b = getDeltaBudgetReais();
     var port = calcPortfolioNetDeltaReais();
-    lbl.textContent = b > 0 ? 'orç. R$' + b.toFixed(0) + ' · carteira R$' + port.deltaReais.toFixed(0) : '';
-    lbl.style.color = (b > 0 && Math.abs(port.deltaReais) >= b) ? 'var(--red)' : 'var(--muted)';
+    if (!CAPITAL_CONFIRMADO) {
+      lbl.textContent = '⚠ capital nao confirmado (default)';
+      lbl.style.color = 'var(--yellow, #d68910)';
+      lbl.title = 'O orcamento do Nivel B esta derivado do default de R$100.000. '
+                + 'Digite seu capital real — senao o Nivel B dispara falso.';
+    } else {
+      lbl.textContent = b > 0 ? 'orç. R$' + b.toFixed(0) + ' · carteira R$' + port.deltaReais.toFixed(0) : '';
+      lbl.style.color = (b > 0 && Math.abs(port.deltaReais) >= b) ? 'var(--red)' : 'var(--muted)';
+      lbl.title = '';
+    }
   }
   renderRadar(radarActiveTab);
 }
@@ -2189,16 +2196,41 @@ function toggleAuto() {
   }
 }
 // ─── RADAR DE DECISÃO ────────────────────────────────────────────────────────
+// V3.2 — o VXBR ja era buscado aqui, mas o valor so ia pra radarData e nunca
+// chegava ao campo visivel: o input ficava vazio e parecia exigir digitacao.
+// Agora a cotacao popula o input, o rotulo de zona e o localStorage.
+// Guard: cotacao invalida (0, NaN, fetch falho) NUNCA sobrescreve o valor salvo.
+function applyVxbr(v, origem) {
+  v = parseFloat(v) || 0;
+  if (!(v > 0)) return false;
+  radarData.vxbr = v;
+  lsSet(LS_KEYS.vxbr, String(v));
+  var inp = document.getElementById('vxbr-input');
+  if (inp) inp.value = v.toFixed(2);
+  var zona = document.getElementById('vxbr-zona');
+  if (zona) {
+    var z = getVxbrZone(v);
+    zona.textContent = z.label;
+    zona.style.color = z.color;
+    zona.title = 'VXBR ' + v.toFixed(2) + ' · ' + (origem || 'manual');
+  }
+  return true;
+}
 async function loadRadar() {
+  var ok = false;
   try {
     var r = await fetch('https://api.oplab.com.br/v3/market/quote?tickers=VXBR', { headers: hdr() });
     if (r.ok) {
       var arr = await r.json();
       var q = Array.isArray(arr) ? (arr.find(function(x){ return x.symbol==='VXBR'; }) || arr[0]) : arr;
-      radarData.vxbr = q.close || q.last || 0;
+      ok = applyVxbr(q.close || q.last || 0, 'Oplab auto');
     }
-  } catch(e) {
-    radarData.vxbr = normIvPct(radarData.ivCur);
+  } catch(e) { ok = false; }
+  // Fallback so entra se nao houver valor valido ja em uso (buscado ou salvo).
+  if (!ok && !(radarData.vxbr > 0)) {
+    var saved = parseFloat(lsGet(LS_KEYS.vxbr, ''));
+    if (saved > 0) applyVxbr(saved, 'salvo');
+    else applyVxbr(normIvPct(radarData.ivCur), 'IV spot (aprox.)');
   }
   renderRadar();
   renderRecomendacoes();
@@ -2322,6 +2354,13 @@ function checkRollTriggers(pos) {
 // um delta de 45 de volta ao orcamento, so paga dois spreads.
 // "Rolar 3" (aumentar quantidade) nao e degrau, e excecao com 5 condicoes —
 // tratado como Encerrar para nao virar martingale no calor do momento.
+// V3.2 — DECISAO UNICA. Antes existiam DUAS implementacoes da mesma decisao
+// (esta + renderRecomendacoes) com limiares divergentes, o que podia dar dois
+// vereditos diferentes pra mesma posicao. Agora esta e a unica fonte de verdade,
+// e segue exatamente a ordem do fluxograma do manual:
+//   (1) Stop financeiro  (2) Take-profit  (3) Breakeven
+//   (4) Nivel A          (5) Nivel B      (6) Stress [ainda nao calculado]
+// Primeiro que casar vence — a ordem codifica severidade.
 function getRolloverStage(legs, pctCapturado, dte, pos) {
   var spot = spotData.close || 168;
   var bes  = findBreakevens(legs);
@@ -2330,32 +2369,40 @@ function getRolloverStage(legs, pctCapturado, dte, pos) {
 
   var tr = pos ? checkRollTriggers(pos) : null;
 
-  if (tr && tr.regra10)
-    return { move:'sair', label:'Rolar pra fora ou encerrar', desc:'Menos de 10 DU com perna acima de 30Δ — gamma domina e observar não é opção. Decisão binária', color:'var(--red)', urgency:'URGENTE', tr:tr };
+  // (1) STOP FINANCEIRO — perda >= 2x o credito recebido. Encerra, nao rola.
+  if (pctCapturado <= -200)
+    return { move:'encerrar', label:'Encerrar — stop financeiro', desc:'Perda de ' + Math.abs(pctCapturado).toFixed(0) + '% do crédito (limite: 200%). Encerra, não rola', color:'var(--red)', urgency:'URGENTE', tr:tr };
 
-  if (dte <= 5 && nearestDist < 2)
-    return { move:'encerrar', label:'Encerrar', desc:'DTE crítico e spot a ' + nearestDist.toFixed(1) + '% do breakeven — realizar e sair', color:'var(--red)', urgency:'URGENTE', tr:tr };
+  // (2) TAKE-PROFIT — 50% do credito OU 15 DTE, o que vier primeiro.
+  if (pctCapturado >= 50)
+    return { move:'encerrar', label:'Encerrar — take-profit', desc:pctCapturado.toFixed(0) + '% do crédito capturado (alvo: 50%). Encerra ou rola pra fora', color:'var(--green)', urgency:'ACAO', tr:tr };
+  if (dte <= 15)
+    return { move:'sair', label:'Encerrar ou rolar pra fora', desc:dte + ' DU restantes (limite: 15). Take-profit por tempo — o prêmio que sobra não paga o gamma que vem', color:'var(--green)', urgency:'ACAO', tr:tr };
 
-  if (dte <= 5 && pctCapturado >= 50)
-    return { move:'encerrar', label:'Encerrar', desc:'DTE crítico com ' + pctCapturado.toFixed(0) + '% do crédito capturado — realizar o lucro', color:'var(--green)', urgency:'ACAO', tr:tr };
+  // (3) BREAKEVEN — <3% dispara; 3-6% e so aviso, nao forca acao.
+  if (nearestDist < 3)
+    return { move:'afastar', label:'Afastar strike ou encerrar', desc:'Spot a ' + nearestDist.toFixed(1) + '% do breakeven (gatilho: 3%). Rolar afastando o strike, crédito líquido ≥ 0', color:'var(--red)', urgency:'URGENTE', tr:tr };
 
-  if (tr && tr.netBreach && !tr.breaches.length)
-    return { move:'recentrar', label:'Recentrar', desc:'Delta líquido da carteira R$' + tr.portfolioDeltaReais.toFixed(0) + ' estourou o orçamento de R$' + tr.budget.toFixed(0) + ' sem nenhuma perna no gatilho — é concentração. Aproximar a perna vencedora gera crédito e reduz o líquido', color:'var(--yellow)', urgency:'ATENCAO', tr:tr, sug:suggestRecentragem(pos) };
-
+  // (4) NIVEL A — delta por perna contra o teto da faixa de DTE.
   if (tr && tr.breaches.length) {
     var pior = tr.breaches.slice().sort(function(a,b){ return b.absDelta-a.absDelta; })[0];
     var dsc = pior.tipo + ' K' + pior.strike.toFixed(0) + ' em ' + (pior.absDelta*100).toFixed(0) + 'Δ (gatilho ' + (tr.trigger*100).toFixed(0) + 'Δ em ' + dte + ' DU)';
     if (pior.absDelta >= 0.50 || tr.breaches.length >= 2)
-      return { move:'afastar', label:'Afastar strike', desc:dsc + ' — recentrar já não cobre. Rolar no tempo afastando o strike, com crédito líquido não negativo', color:'var(--yellow)', urgency:'ATENCAO', tr:tr };
-    return { move:'recentrar', label:'Recentrar', desc:dsc + ' — aproximar a perna vencedora primeiro: entra crédito e reduz o delta líquido', color:'var(--accent)', urgency:'MONITORAR', tr:tr, sug:suggestRecentragem(pos) };
+      return { move:'afastar', label:'Rolagem 2 — straddle Δ50', desc:dsc + '. Degrau 1 já não cobre: converge as duas pernas pra delta 50, no crédito', color:'var(--yellow)', urgency:'ATENCAO', tr:tr };
+    return { move:'recentrar', label:'Rolagem 1 — 0x0', desc:dsc + '. Crédito da perna não testada paga a recompra da testada', color:'var(--accent)', urgency:'ATENCAO', tr:tr, sug:suggestRecentragem(pos) };
   }
 
-  if (nearestDist < 3 || (dte <= 7 && pctCapturado < 40))
-    return { move:'afastar', label:'Afastar strike', desc:'Spot a ' + nearestDist.toFixed(1) + '% do breakeven — rolar no tempo afastando o strike, crédito líquido não negativo', color:'var(--yellow)', urgency:'ATENCAO', tr:tr };
-  if (nearestDist < 6 || pctCapturado >= 50)
-    return { move:'recentrar', label:'Recentrar', desc:'Aproximar a perna vencedora — entra crédito e reduz o delta líquido antes de precisar afastar strike', color:'var(--accent)', urgency:'MONITORAR', tr:tr, sug:suggestRecentragem(pos) };
+  // (5) NIVEL B — concentracao: dispara mesmo com todas as pernas tranquilas.
+  if (tr && tr.netBreach)
+    return { move:'recentrar', label:'Recentrar — Nível B', desc:'Delta líquido da carteira R$' + tr.portfolioDeltaReais.toFixed(0) + ' acima do orçamento de R$' + tr.budget.toFixed(0) + ' sem perna no gatilho — é concentração', color:'var(--yellow)', urgency:'ATENCAO', tr:tr, sug:suggestRecentragem(pos) };
 
-  return { move:'aguardar', label:'Aguardar', desc:'Delta líquido dentro do orçamento e nenhuma perna no gatilho', color:'var(--muted)', urgency:'', tr:tr };
+  // (6) STRESS — pendente: exige reprecificar o book em -7% spot / +8pts IV.
+
+  // Nada disparou. Banda 3-6% do BE entra como aviso, sem forcar acao.
+  var aviso = (nearestDist < 6)
+    ? 'Nenhum gatilho. Aviso: spot a ' + nearestDist.toFixed(1) + '% do breakeven (banda 3–6%) — monitorar, sem ação forçada'
+    : 'Delta líquido dentro do orçamento, nenhuma perna no gatilho e breakeven distante';
+  return { move:'aguardar', label:'Aguardar', desc:aviso, color:'var(--muted)', urgency:'', tr:tr };
 }
 function renderRadarEntrar() {
   var vxbr    = radarData.vxbr    || 0;
@@ -2533,49 +2580,19 @@ function renderRadarEncerrar() {
     var nearestDist = 100;
     bes.forEach(function(be){ var d=Math.abs(be-spot)/spot*100; if(d<nearestDist) nearestDist=d; });
     var tr = checkRollTriggers(pos);
-    var mainColor, mainLabel, mainDesc;
+    // V3.2 — antes esta funcao tinha sua PROPRIA cadeia de decisao, com limiares
+    // diferentes da do radar: a mesma posicao podia receber dois vereditos.
+    // Agora consome getRolloverStage(), fonte unica de verdade.
+    var roll = getRolloverStage(legs, pct, dte, pos);
+    var mainColor = roll.color, mainLabel = roll.label, mainDesc = roll.desc;
     var signals = [];
-    if (tr.regra10) {
-      mainColor = 'var(--red)'; mainLabel = 'Rolar pra fora ou encerrar';
-      mainDesc = 'Perna acima de 30Δ com menos de 10 DU — sem terceira opcao';
-      signals.push({ c:'var(--red)', t:'Perna testada em ' + (tr.testada?(tr.testada.absDelta*100).toFixed(0):'—') + 'Δ' });
-      signals.push({ c:'var(--red)', t:'DTE: ' + dte + 'du — gamma domina' });
-    } else if (dte <= 5 && nearestDist < 2) {
-      mainColor = 'var(--red)'; mainLabel = 'Encerrar';
-      mainDesc = 'DTE critico e spot junto do breakeven — realizar e sair';
-      signals.push({ c:'var(--red)', t:'DTE: ' + dte + 'du — muito pouco tempo' });
-      signals.push({ c:'var(--red)', t:'BE a apenas ' + nearestDist.toFixed(1) + '% do spot' });
-    } else if (pct >= 50 && dte <= 10) {
-      mainColor = 'var(--green)'; mainLabel = 'Encerrar';
-      mainDesc = '50%+ capturado com DTE baixo — realizar o lucro';
-      signals.push({ c:'var(--green)', t:pct.toFixed(0) + '% do credito capturado' });
-      signals.push({ c:'var(--yellow)', t:'Apenas ' + dte + 'du restantes' });
-    } else if (tr.netBreach) {
-      mainColor = 'var(--yellow)'; mainLabel = 'Recentrar';
-      mainDesc = 'Delta liquido da carteira acima do orcamento — e concentracao, nao motivo pra encerrar. Aproximar a perna vencedora gera credito';
-      signals.push({ c:'var(--yellow)', t:'Carteira: R$' + tr.portfolioDeltaReais.toFixed(0) + ' / R$' + tr.budget.toFixed(0) });
-      signals.push({ c:'var(--muted)', t:'Capturado: ' + pct.toFixed(0) + '%' });
-    } else if (nearestDist < 3) {
-      mainColor = 'var(--red)'; mainLabel = 'Afastar strike';
-      mainDesc = 'Spot junto do breakeven — rolar no tempo afastando o strike, ou sair';
-      signals.push({ c:'var(--red)', t:'BE a ' + nearestDist.toFixed(1) + '% — zona de perigo' });
-    } else if (dte <= 7) {
-      mainColor = 'var(--yellow)'; mainLabel = 'Rolar pra fora ou encerrar';
-      mainDesc = 'DTE baixo — janela de decisao, sem meio-termo';
-      signals.push({ c:'var(--yellow)', t:dte + 'du — janela de decisao' });
-      signals.push({ c:pct>=50?'var(--green)':'var(--muted)', t:pct.toFixed(0) + '% capturado ate agora' });
-    } else if (pct >= 50) {
-      mainColor = 'var(--green)'; mainLabel = 'Encerrar e opcional';
-      mainDesc = '50%+ capturado — pode realizar, posicao ainda segura';
-      signals.push({ c:'var(--green)', t:pct.toFixed(0) + '% do credito capturado' });
-      signals.push({ c:'var(--muted)', t:dte + 'du ainda restando' });
-    } else {
-      mainColor = 'var(--muted)'; mainLabel = 'Aguardar';
-      mainDesc = 'Delta liquido dentro do orcamento — deixar o tempo trabalhar';
-      signals.push({ c:'var(--muted)', t:'DTE: ' + dte + 'du' });
-      signals.push({ c:pct>=0?'var(--accent)':'var(--red)', t:'Capturado: ' + pct.toFixed(0) + '%' });
-      signals.push({ c:'var(--green)', t:'Dist. BE: ' + nearestDist.toFixed(1) + '%' });
-    }
+    signals.push({ c:'var(--muted)', t:'DTE: ' + dte + 'du' });
+    signals.push({ c:pct>=50?'var(--green)':(pct>=0?'var(--accent)':'var(--red)'), t:'Capturado: ' + pct.toFixed(0) + '%' });
+    signals.push({ c:nearestDist<3?'var(--red)':(nearestDist<6?'var(--yellow)':'var(--green)'), t:'Dist. BE: ' + nearestDist.toFixed(1) + '%' });
+    if (tr && tr.breaches && tr.breaches.length)
+      signals.push({ c:'var(--yellow)', t:'Nivel A: ' + tr.breaches.length + ' perna(s) no gatilho' });
+    if (tr && tr.netBreach)
+      signals.push({ c:'var(--yellow)', t:'Nivel B: R$' + tr.portfolioDeltaReais.toFixed(0) + ' / R$' + tr.budget.toFixed(0) });
     var pctCl = Math.min(100, Math.max(0, pct));
     html += '<div style="background:var(--surface2);border-radius:8px;padding:14px;border-left:3px solid ' + mainColor + '">'
       + '<div style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent);margin-bottom:8px">' + (pos.name||'Posicao') + '</div>'
@@ -2967,25 +2984,23 @@ function fmtDate(d) {
     if (vLogin)  vLogin.textContent  = APP_VERSION;
     if (vHeader) vHeader.textContent = APP_VERSION;
 
-    // Restaurar Capital
+    // Restaurar Capital — valor salvo conta como confirmado pelo usuario.
     var savedCapital = parseFloat(lsGet(LS_KEYS.capital, ''));
-    if (savedCapital > 0) CAPITAL = savedCapital;
     var capInput = document.getElementById('capital-input');
-    if (capInput) capInput.value = CAPITAL;
-
-    // Restaurar VXBR
-    var savedVxbr = parseFloat(lsGet(LS_KEYS.vxbr, ''));
-    var vxbrInput = document.getElementById('vxbr-input');
-    if (vxbrInput && savedVxbr > 0) {
-      vxbrInput.value = savedVxbr;
-      radarData.vxbr = savedVxbr;
-      var zona = document.getElementById('vxbr-zona');
-      if (zona) {
-        var z = getVxbrZone(savedVxbr);
-        zona.textContent = z.label;
-        zona.style.color = z.color;
-      }
+    if (savedCapital > 0) {
+      CAPITAL = savedCapital;
+      CAPITAL_CONFIRMADO = true;
+      if (capInput) capInput.value = CAPITAL;
+    } else {
+      // Sem valor salvo: deixa o campo VAZIO em vez de exibir o default como se
+      // fosse escolha do usuario. O placeholder ja mostra 100000 como exemplo.
+      if (capInput) capInput.value = '';
+      CAPITAL_CONFIRMADO = false;
     }
+    onCapitalInput(capInput ? capInput.value : '');
+
+    // Restaurar VXBR (a cotacao automatica sobrepoe depois, no loadRadar)
+    applyVxbr(parseFloat(lsGet(LS_KEYS.vxbr, '')), 'salvo');
 
     // Restaurar API Key
     var savedKey = lsGet(LS_KEYS.apiKey, '');
